@@ -978,7 +978,7 @@ static int								SaveCfg_RectRaster_FrameScan						(RectRasterScanSet_type* sca
 
 static int								SaveCfg_PointScanProtocol							(PointScanProtocol_type* pointScanProtocol, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
 
-static int								SaveCfg_RectRaster_PointScanProtocols				(RectRaster_type* rectRaster, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo);
+static int								SaveCfg_RectRaster_PointScanProtocols				(RectRaster_type* rectRaster, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_* parentXMLElementPtr, ERRORINFO* xmlErrorInfo);
 
 static int 								DisplayPanels										(DAQLabModule_type* mod, BOOL visibleFlag); 
 
@@ -1603,7 +1603,7 @@ INIT_ERR
 				errChk( SaveCfg_RectRaster_FrameScan(rectRaster->scanSettings, xmlDOM, scanEngineXMLElement, xmlErrorInfo) );
 				
 				// save point scan protocols
-				errChk( SaveCfg_RectRaster_PointScanProtocols(rectRaster, xmlDOM, scanEngineXMLElement, xmlErrorInfo) );
+				errChk( SaveCfg_RectRaster_PointScanProtocols(rectRaster, xmlDOM, &scanEngineXMLElement, xmlErrorInfo) );
 				
 				break;
 		}
@@ -1857,7 +1857,7 @@ Error:
 	return errorInfo.error;
 }
 
-static int SaveCfg_RectRaster_PointScanProtocols (RectRaster_type* rectRaster, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, ERRORINFO* xmlErrorInfo)
+static int SaveCfg_RectRaster_PointScanProtocols (RectRaster_type* rectRaster, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_* parentXMLElementPtr, ERRORINFO* xmlErrorInfo)
 {
 INIT_ERR
 	
@@ -1880,7 +1880,13 @@ INIT_ERR
 	}
 	
 	// add point scan protocols XML element to parent
-	errChk ( ActiveXML_IXMLDOMElement_appendChild (parentXMLElement, xmlErrorInfo, pointScanProtocolsXMLElement, NULL) ); 
+	if (*parentXMLElementPtr) {
+		errChk ( ActiveXML_IXMLDOMElement_appendChild (*parentXMLElementPtr, xmlErrorInfo, pointScanProtocolsXMLElement, NULL) );
+		OKfreeCAHndl(pointScanProtocolsXMLElement);
+	} else
+		*parentXMLElementPtr = pointScanProtocolsXMLElement;
+	
+	return 0;
 	
 Error:
 	
@@ -5842,7 +5848,9 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					// if value changed, then switch to unnamed protocol
 					if (currentPointScanProtocol->jumpMethod != oldJumpMethod) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1); 
+						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -5862,6 +5870,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->record != oldRecord) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -5876,6 +5886,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->nIntegration != oldNIntegration) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -5898,6 +5910,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->stimulate != oldStimulate) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -5912,6 +5926,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->nHoldBurst != oldNHoldBurst) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -5954,6 +5970,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->holdTime != oldHoldTime) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -5980,6 +5998,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->holdBurstPeriod != oldHoldBurstPeriod) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -5994,6 +6014,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->holdBurstPeriodIncr != oldHoldBurstPeriodIncr) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -6023,6 +6045,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->stimDelay != oldStimDelay) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -6048,6 +6072,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->nStimPulses != oldNPulses) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -6075,6 +6101,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->stimPulseONDuration != oldPulseOnDuration) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -6102,6 +6130,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->stimPulseOFFDuration != oldPulseOffDuration) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -6116,6 +6146,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->nSequenceRepeat != oldNSequenceRepeat) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -6130,6 +6162,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->repeatWait != oldRepeatWait) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -6152,6 +6186,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->startDelayInitVal != oldStartDelayInitVal) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -6170,6 +6206,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					if (currentPointScanProtocol->startDelayIncrement != oldStartDelayIncrement) {
 						SetCtrlIndex(panel, PointTab_Protocol, 0);
 						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 					}
 					
 					break;
@@ -6192,6 +6230,7 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					InsertListItem(panel, PointTab_Protocol, -1, pointScanProtocolCopy->protocolName, ListNumItems(scanEngine->pointScan.pointScanProtocols));
 					SetCtrlAttribute(panel, PointTab_Protocol, ATTR_DIMMED, 0);
 					SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 0);
+					SetCtrlAttribute(panel, PointTab_SaveProtocol, ATTR_DIMMED, 0);
 					int nListPointScanProtocols = 0;
 					GetNumListItems(panel, PointTab_Protocol, &nListPointScanProtocols);
 					SetCtrlIndex(panel, PointTab_Protocol, nListPointScanProtocols - 1);
@@ -6222,8 +6261,12 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						discard_PointScanProtocol_type(&pointScanProtocol);
 					
 						// dim protocols UI control if there are no more point scan protocols available
-						if (!ListNumItems(scanEngine->pointScan.pointScanProtocols))
+						if (!ListNumItems(scanEngine->pointScan.pointScanProtocols)) {
 							SetCtrlAttribute(panel, PointTab_Protocol, ATTR_DIMMED, 1);
+							SetCtrlAttribute(panel, PointTab_SaveProtocol, ATTR_DIMMED, 1);
+							OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+							scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
+						}
 					}
 					
 					break;
@@ -6238,6 +6281,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						// if the unnamed protocol is selected, do nothing
 						if (protocolIdx < 1) {
 							SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
+							OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+							scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
 							return 0;
 						}
 						
@@ -6249,6 +6294,66 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						
 						// apply protocol settings to the scan engine
 						SetPointScanProtocolUI(scanEngine, FALSE);
+					}
+					
+					break;
+					
+				case PointTab_SaveProtocol:
+					
+					{
+						// create new xml DOM
+						CAObjHandle						pointScanProtocolsXMLDOM			= 0;
+						ActiveXMLObj_IXMLDOMElement_	pointScanProtocolsXMLRootElement	= 0;
+						ERRORINFO 						xmlErrorInfo;
+						
+						
+						ActiveXML_NewDOMDocument60IXMLDOMDocument3_ (NULL, 1, LOCALE_NEUTRAL, 0, &pointScanProtocolsXMLDOM);
+						SaveCfg_RectRaster_PointScanProtocols(scanEngine, pointScanProtocolsXMLDOM, &pointScanProtocolsXMLRootElement, &xmlErrorInfo);
+						DLSaveToXMLPopup(pointScanProtocolsXMLDOM, pointScanProtocolsXMLRootElement, &xmlErrorInfo);
+						OKfreeCAHndl(pointScanProtocolsXMLRootElement);
+						OKfreeCAHndl(pointScanProtocolsXMLDOM);
+						
+					}
+					
+					break;
+					
+				case PointTab_LoadProtocol:
+					
+					{
+						CAObjHandle						pointScanProtocolsXMLDOM			= 0;
+						ActiveXMLObj_IXMLDOMElement_	pointScanProtocolsXMLRootElement	= 0;
+						ListType						loadedPointScanProtocols			= 0;	// list of PointScanProtocol_type* elements.
+						PointScanProtocol_type*			selectedPointScanProtocol			= NULL;
+						ERRORINFO 						xmlErrorInfo;
+						
+						DLLoadFromXMLPopup(&pointScanProtocolsXMLDOM, &pointScanProtocolsXMLRootElement, "PointScanProtocols", &xmlErrorInfo);
+						
+						if (pointScanProtocolsXMLDOM && pointScanProtocolsXMLRootElement) {
+							
+							// convert XML to point scan protocols
+							LoadCfg_RectRaster_PointScanProtocols(&loadedPointScanProtocols, &selectedPointScanProtocol, pointScanProtocolsXMLRootElement, &xmlErrorInfo);
+							
+							// assign loaded protocols to the scan engine
+							if (loadedPointScanProtocols) {
+								OKfreeList(&scanEngine->pointScan.pointScanProtocols, discard_PointScanProtocol_type);
+								scanEngine->pointScan.pointScanProtocols = loadedPointScanProtocols;
+								loadedPointScanProtocols = 0;
+							}
+							
+							// select protocol if there is any
+							if (selectedPointScanProtocol)
+								SetRectRasterPointScanProtocol(scanEngine, selectedPointScanProtocol); 
+							else {
+								OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+								scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
+							}
+								
+							// update scan engine UI
+							SetPointScanProtocolUI(scanEngine, TRUE);
+						}
+						
+						OKfreeCAHndl(pointScanProtocolsXMLRootElement);
+						OKfreeCAHndl(pointScanProtocolsXMLDOM);
 					}
 					
 					break;
@@ -8516,6 +8621,7 @@ static int SetPointScanProtocolUI (RectRaster_type* rectRaster, BOOL updateProto
 		size_t						nProtocols			= ListNumItems(rectRaster->pointScan.pointScanProtocols);
 		PointScanProtocol_type*		pointScanProtocol	= NULL;
 	
+		ClearListCtrl(rectRaster->baseClass.pointScanPanHndl, PointTab_Protocol);
 		InsertListItem(rectRaster->baseClass.pointScanPanHndl, PointTab_Protocol, 0, "", 0);
 		SetCtrlIndex(rectRaster->baseClass.pointScanPanHndl, PointTab_Protocol, 0);
 	
@@ -8531,6 +8637,15 @@ static int SetPointScanProtocolUI (RectRaster_type* rectRaster, BOOL updateProto
 			if (!strcmp(pointScanProtocol->protocolName, rectRaster->pointScan.pointScanProtocol->protocolName))
 			SetCtrlIndex(rectRaster->baseClass.pointScanPanHndl, PointTab_Protocol, i);
 		}
+	}
+	
+	// dim/undim delete and save buttons
+	if (ListNumItems(rectRaster->pointScan.pointScanProtocols)) {
+		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_DelProtocol, ATTR_DIMMED, 0);
+		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_SaveProtocol, ATTR_DIMMED, 0);
+	} else {
+		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_DelProtocol, ATTR_DIMMED, 1);
+		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_SaveProtocol, ATTR_DIMMED, 1);
 	}
 	
 	if (ListNumItems(rectRaster->pointScan.pointJumps))

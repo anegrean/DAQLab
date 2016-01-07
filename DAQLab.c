@@ -366,6 +366,9 @@ INIT_ERR
 	// adjust thread pool
 	errChk( CmtSetThreadPoolAttribute(DLThreadPoolHndl, ATTR_TP_PROCESS_EVENTS_WHILE_WAITING, TRUE) );
 	
+	// change ActiveX threading policy
+	CA_InitActiveXThreadStyleForCurrentThread(0, COINIT_APARTMENTTHREADED);
+	
 	// load DAQLab environment resources
 	DAQLab_Load(); 
 	
@@ -1805,12 +1808,13 @@ static int DAQLab_NewXMLDOM (const char fileName[], CAObjHandle* xmlDOM, ActiveX
 	VBOOL								xmlLoaded;
 	BOOL								rootElementNameOK		= FALSE;
 	BOOL								foundXMLDOMFlag			= 1;
-	ActiveXMLObj_IXMLDOMElement_		newElement;
-	BSTR								bstrFileName;
-	double 								t1, t2;
-	char								timeStr[10];
-	char								msg[100];
-	char*								rootElementName;
+	ActiveXMLObj_IXMLDOMElement_		newElement				= 0;
+	BSTR								bstrFileName			= NULL;
+	double 								t1						= 0;
+	double								t2						= 0;
+	char								timeStr[10]				= "";
+	char								msg[100]				= "";
+	char*								rootElementName			= NULL;
 	
 	
 	// create new ActiveX DOM object
@@ -1882,8 +1886,9 @@ static int	DAQLab_SaveXMLDOM (const char fileName[], CAObjHandle* xmlDOM)
 {
 	HRESULT				xmlerror;
 	ERRORINFO			xmlErrorInfo;
-	BSTR				bstrFileName;
-	double				t1, t2;
+	BSTR				bstrFileName		= NULL;
+	double				t1					= 0;
+	double				t2					= 0;
 	char				timeStr[10]; 
 	
 	// save XML file
@@ -1895,6 +1900,7 @@ static int	DAQLab_SaveXMLDOM (const char fileName[], CAObjHandle* xmlDOM)
 	CA_CStringToBSTR(fileName, &bstrFileName); 
 	// write file
 	XMLErrChk ( ActiveXML_IXMLDOMDocument3_save(*xmlDOM, &xmlErrorInfo, CA_VariantBSTR(bstrFileName)) );
+	CA_FreeBSTR(bstrFileName);
 	
 	t2 = Timer();
 	
@@ -2219,6 +2225,132 @@ Error:
 	return errorInfo.error;
 	
 }
+
+int DLSaveToXMLPopup (CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ rootElement, ERRORINFO* xmlErrorInfo)
+{
+INIT_ERR
+
+	int 				fileSelection					= 0;
+	char 				fileName[MAX_PATHNAME_LEN]		= "";
+	BSTR				bstrFileName					= NULL;
+	
+	
+	if (!rootElement) return 0; // do nothing if there is no element
+	
+	fileSelection = FileSelectPopupEx ("","*.xml", "*.xml", "Save XML", VAL_SAVE_BUTTON, 0, 1, fileName);
+	
+	switch (fileSelection) {
+			
+		case VAL_NO_FILE_SELECTED:
+			
+			return 0;
+			
+		case VAL_EXISTING_FILE_SELECTED:
+		case VAL_NEW_FILE_SELECTED:
+			
+			// add root element to DOM		
+			errChk( ActiveXML_IXMLDOMDocument3_appendChild(xmlDOM, xmlErrorInfo, rootElement, NULL) );
+			// write file
+			CA_CStringToBSTR(fileName, &bstrFileName); 
+			errChk ( ActiveXML_IXMLDOMDocument3_save(xmlDOM, xmlErrorInfo, CA_VariantBSTR(bstrFileName)) );
+			CA_FreeBSTR(bstrFileName);
+			
+			break;
+			
+		default:   // negative values for errors
+			
+			return fileSelection;
+	}
+	
+Error:
+	
+	return errorInfo.error;
+}
+
+
+int DLLoadFromXMLPopup (CAObjHandle* xmlDOMPtr, ActiveXMLObj_IXMLDOMElement_* rootElementPtr, char rootElementName[], ERRORINFO* xmlErrorInfo)
+{
+#define	DLLoadFromXMLPopup_Err_RootElementNameMismatch		-1
+#define	DLLoadFromXMLPopup_Err_XMLNotLoaded					-2
+INIT_ERR
+
+	int 							fileSelection					= 0;
+	CAObjHandle						xmlDOM							= 0;
+	VBOOL							xmlLoaded						= 0;
+	ActiveXMLObj_IXMLDOMElement_	rootElement						= 0;
+	char 							fileName[MAX_PATHNAME_LEN]		= "";
+	char*							XMLElementName					= NULL;
+	BSTR							bstrFileName					= NULL;
+
+	// init
+	*xmlDOMPtr 		= 0;
+	*rootElementPtr = 0;
+	
+	fileSelection = FileSelectPopupEx ("","*.xml", "*.xml", "Save XML", VAL_LOAD_BUTTON, 0, 1, fileName);
+	
+	switch (fileSelection) {
+			
+		case VAL_NO_FILE_SELECTED:
+		case VAL_NEW_FILE_SELECTED:
+			
+			return 0;
+			
+		case VAL_EXISTING_FILE_SELECTED:
+			
+			// create new DOM
+			errChk( ActiveXML_NewDOMDocument60IXMLDOMDocument3_(NULL, 1, LOCALE_NEUTRAL, 0, &xmlDOM) );
+			
+			// load DOM from file
+			CA_CStringToBSTR(fileName, &bstrFileName);
+			errChk( ActiveXML_IXMLDOMDocument3_load(xmlDOM, xmlErrorInfo, CA_VariantBSTR(bstrFileName), &xmlLoaded) );
+			CA_FreeBSTR(bstrFileName);
+			bstrFileName = NULL;
+			
+			// check if loaded properly
+			if (xmlLoaded == VFALSE)
+				SET_ERR(DLLoadFromXMLPopup_Err_XMLNotLoaded, "XML file could not be loaded.");
+			
+			// load root element
+			errChk( ActiveXML_IXMLDOMDocument3_GetdocumentElement(xmlDOM, xmlErrorInfo, &rootElement) );
+			
+			// check root element name
+			errChk( ActiveXML_IXMLDOMElement_GetnodeName(rootElement, xmlErrorInfo, &XMLElementName) );
+			if (rootElementName && rootElementName[0] && strcmp(XMLElementName, rootElementName) )
+				SET_ERR(DLLoadFromXMLPopup_Err_RootElementNameMismatch, "XML root element name does not match with the requested element name.");
+			
+			*xmlDOMPtr 		= xmlDOM;
+			*rootElementPtr = rootElement;
+			
+			// cleanup
+			CA_FreeMemory(XMLElementName);
+			XMLElementName = NULL;
+			
+			break;
+			
+		default:   // negative values for errors
+			
+			return fileSelection;
+	}
+	
+	return 0;	
+
+Error:
+
+	// cleanup
+	CA_FreeMemory(XMLElementName);
+	XMLElementName = NULL;
+	
+	OKfreeCAHndl(rootElement);
+	OKfreeCAHndl(xmlDOM);
+	
+	if (bstrFileName) {
+		CA_FreeBSTR(bstrFileName);
+		bstrFileName = NULL;
+	}
+
+	return errorInfo.error;
+}
+
 
 static UITaskCtrl_type*	init_UITaskCtrl_type (TaskControl_type* taskControl)
 {

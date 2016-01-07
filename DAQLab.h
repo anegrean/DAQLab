@@ -198,18 +198,23 @@ CmtThreadPoolHandle	DLGetCommonThreadPoolHndl			(void);
 //-------------------------------------------------------------------------------
 // DAQLab XML management
 //-------------------------------------------------------------------------------
-	// adds multiple XML Element children or attributes for a parent XML Element
+	// Adds multiple XML Element children or attributes for a parent XML Element
 int					DLAddToXMLElem						(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ parentXMLElement, DAQLabXMLNode childXMLNodes[], DAQLabXMLNodeTypes nodeType, size_t nNodes, ERRORINFO* xmlErrorInfo);
 
-	// places the value of multiple XML Attributes of an Element into user provided pointers
+	// Places the value of multiple XML Attributes of an Element into user provided pointers
 int					DLGetXMLElementAttributes			(char XMLElementName[], ActiveXMLObj_IXMLDOMElement_ XMLElement, DAQLabXMLNode Attributes[], size_t nAttributes);
 
 int					DLGetSingleXMLElementFromElement	(ActiveXMLObj_IXMLDOMElement_ parentXMLElement, char elementName[], ActiveXMLObj_IXMLDOMElement_* childXMLElement);
 
-	// saves task controller settings to XML and returns a "TaskControllerSettings" XML element
+	// Saves task controller settings to XML and returns a "TaskControllerSettings" XML element
 int 				DLSaveTaskControllerSettingsToXML 	(TaskControl_type* taskController, CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ taskControllerXMLElement, ERRORINFO* xmlErrorInfo);
-	// loads task controller settings from a "TaskControllerSettings" XML element
+	// Loads task controller settings from a "TaskControllerSettings" XML element
 int					DLLoadTaskControllerSettingsFromXML	(TaskControl_type* taskController, ActiveXMLObj_IXMLDOMElement_ taskControllerSettingsXMLElement, ERRORINFO* xmlErrorInfo);
+
+int					DLSaveToXMLPopup					(CAObjHandle xmlDOM, ActiveXMLObj_IXMLDOMElement_ rootElement, ERRORINFO* xmlErrorInfo);
+
+	// Displays a file selection popup and loads its root XML element. If rootElementName is different than NULL or "" then it loads the root element only if the name matches.
+int					DLLoadFromXMLPopup					(CAObjHandle* xmlDOMPtr, ActiveXMLObj_IXMLDOMElement_* rootElementPtr, char rootElementName[], ERRORINFO* xmlErrorInfo);
 
 #ifdef __cplusplus
     }

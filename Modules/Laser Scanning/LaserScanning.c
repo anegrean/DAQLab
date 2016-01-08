@@ -451,8 +451,8 @@ struct ScanEngine {
 	
 	int							newObjectivePanHndl;
 	int							scanPanHndl;				// Panel handle for the scan engine.
-	int							frameScanPanHndl;			// Panel handle for adjusting scan settings such as pixel size, etc...
-	int							pointScanPanHndl;			// Panel handle for the management of ROIs
+	int							frameScanPanHndl;			// Panel handle for adjusting frame scan settings such as pixel size, etc...
+	int							pointScanPanHndl;			// Panel handle for adjusting point scan ROIs and protocols.
 	int							engineSetPanHndl;			// Panel handle for scan engine settings such as VChans and scan axis types.
 	
 	ImageDisplay_type*			activeDisplay;				// Reference to the active image display that interacts with the scan engine
@@ -853,6 +853,8 @@ static int CVICALLBACK 					NonResRectRasterScan_FrameScanPan_CB 				(int panel,
 
 	// given a subregion frame scan 1-based list index from scanEngine->scanROIs list, this function sets the UI and scan engine data structures to scan the desired subregion 
 static int								NonResRectRasterScan_SetSubregionFrameScan			(RectRaster_type* rectRaster, size_t subregionIdx, char** errorMsg);
+
+static void 							SwitchRectRasterPointScanToUnnamedProtocol 			(RectRaster_type* scanEngine);
 
 static int CVICALLBACK 					NonResRectRasterScan_PointScanPan_CB		 		(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
@@ -2000,7 +2002,15 @@ INIT_ERR
 				errChk( DLGetSingleXMLElementFromElement((ActiveXMLObj_IXMLDOMElement_)scanEngineNode, "PointScanProtocols", &pointScanProtocolsXMLElement) );
 				errChk( LoadCfg_RectRaster_PointScanProtocols(&pointScanProtocolsList, &selectedPointScanProtocol, pointScanProtocolsXMLElement, xmlErrorInfo) );
 				OKfreeCAHndl(pointScanProtocolsXMLElement);
-				nullChk( pointScanProtocolCopy = copy_PointScanProtocol_type(selectedPointScanProtocol) );
+				
+				if (selectedPointScanProtocol) {
+					// load selected protocol if there is one 
+					nullChk( pointScanProtocolCopy = copy_PointScanProtocol_type(selectedPointScanProtocol) );
+				} else {
+					// set default point scan settings if there is no selected protocol
+					nullChk( pointScanProtocolCopy = init_PointScanProtocol_type("", NonResGalvoRasterScan_Default_HoldTime, 1, 0, 0, 0, NonResGalvoRasterScan_Default_StimPulseONDuration, 
+									 NonResGalvoRasterScan_Default_StimPulseOFFDuration, 1, PointJump_SinglePoints, FALSE, FALSE, 1, 1, 0, 0, 0) );
+				}
 				
 				nullChk( scanEngine = (ScanEngine_type*)init_RectRaster_type((LaserScanning_type*)mod, scanEngineName, continuousFrameScan, nFrames, galvoSamplingRate, referenceClockFreq, 
 							 												 pixelDelay, shutterSwitchTime, &frameScanSettings, &pointScanProtocolCopy, &pointScanProtocolsList, scanLensFL, tubeLensFL) ); 
@@ -5805,6 +5815,14 @@ Error:
 RETURN_ERR
 }
 
+static void SwitchRectRasterPointScanToUnnamedProtocol (RectRaster_type* scanEngine)
+{
+	SetCtrlIndex(scanEngine->baseClass.pointScanPanHndl, PointTab_Protocol, 0);
+	SetCtrlAttribute(scanEngine->baseClass.pointScanPanHndl, PointTab_DelProtocol, ATTR_DIMMED, 1);
+	OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
+	scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
+}
+
 static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
 	RectRaster_type*			scanEngine					= callbackData;
@@ -5846,12 +5864,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->jumpMethod != oldJumpMethod) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->jumpMethod != oldJumpMethod)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 				
@@ -5867,12 +5881,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetRectRasterScanEnginePointScanRecordUI(panel, currentPointScanProtocol->record);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->record != oldRecord) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->record != oldRecord)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -5883,12 +5893,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					GetCtrlVal(panel, control, &currentPointScanProtocol->nIntegration);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->nIntegration != oldNIntegration) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->nIntegration != oldNIntegration)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -5907,12 +5913,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 						SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, FALSE);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->stimulate != oldStimulate) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->stimulate != oldStimulate)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 			
@@ -5923,12 +5925,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					GetCtrlVal(panel, control, &currentPointScanProtocol->nHoldBurst); 
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->nHoldBurst != oldNHoldBurst) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->nHoldBurst != oldNHoldBurst)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -5967,12 +5965,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->holdTime != oldHoldTime) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->holdTime != oldHoldTime)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -5995,12 +5989,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->holdBurstPeriod);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->holdBurstPeriod != oldHoldBurstPeriod) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->holdBurstPeriod != oldHoldBurstPeriod)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -6011,12 +6001,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					GetCtrlVal(panel, control, &currentPointScanProtocol->holdBurstPeriodIncr);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->holdBurstPeriodIncr != oldHoldBurstPeriodIncr) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->holdBurstPeriodIncr != oldHoldBurstPeriodIncr)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -6042,12 +6028,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->stimDelay);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->stimDelay != oldStimDelay) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->stimDelay != oldStimDelay)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -6069,12 +6051,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->nStimPulses);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->nStimPulses != oldNPulses) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->nStimPulses != oldNPulses)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -6098,12 +6076,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->stimPulseONDuration); 
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->stimPulseONDuration != oldPulseOnDuration) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->stimPulseONDuration != oldPulseOnDuration)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -6127,12 +6101,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->stimPulseOFFDuration); 
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->stimPulseOFFDuration != oldPulseOffDuration) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->stimPulseOFFDuration != oldPulseOffDuration)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -6143,12 +6113,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					GetCtrlVal(panel, control, &currentPointScanProtocol->nSequenceRepeat);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->nSequenceRepeat != oldNSequenceRepeat) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->nSequenceRepeat != oldNSequenceRepeat)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -6159,12 +6125,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					GetCtrlVal(panel, control, &currentPointScanProtocol->repeatWait);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->repeatWait != oldRepeatWait) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->repeatWait != oldRepeatWait)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -6183,12 +6145,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->startDelayInitVal);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->startDelayInitVal != oldStartDelayInitVal) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->startDelayInitVal != oldStartDelayInitVal)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 				
@@ -6203,12 +6161,8 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					SetCtrlVal(panel, control, currentPointScanProtocol->startDelayIncrement);
 					
 					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->startDelayIncrement != oldStartDelayIncrement) {
-						SetCtrlIndex(panel, PointTab_Protocol, 0);
-						SetCtrlAttribute(panel, PointTab_DelProtocol, ATTR_DIMMED, 1);
-						OKfree(scanEngine->pointScan.pointScanProtocol->protocolName);
-						scanEngine->pointScan.pointScanProtocol->protocolName = StrDup("");
-					}
+					if (currentPointScanProtocol->startDelayIncrement != oldStartDelayIncrement)
+						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
 					
@@ -8330,6 +8284,9 @@ INIT_ERR
 		pointJumps[nPointJumps - 1] = pointJump;
 	}
 	
+	// do nothing if there are no active points to jump to
+	if (!nPointJumps) return;
+	
 	switch (rectRaster->pointScan.pointScanProtocol->jumpMethod) {
 		
 		case PointJump_SinglePoints:
@@ -8346,11 +8303,9 @@ INIT_ERR
 		case PointJump_PointGroup:
 		case PointJump_IncrementalPointGroup:
 			
-			if (nPointJumps) {
-				NonResRectRasterScan_PointROIVoltage(rectRaster, pointJumps[0], &fastAxisCommandV, &slowAxisCommandV);
-				errChk( NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV, &jumpTime, NULL) );
-				pointScan->minStartDelay = jumpTime;
-			}
+			NonResRectRasterScan_PointROIVoltage(rectRaster, pointJumps[0], &fastAxisCommandV, &slowAxisCommandV);
+			errChk( NonResRectRasterScan_JumpTime(rectRaster, fastAxisCal->parked - fastAxisCommandV, slowAxisCal->parked - slowAxisCommandV, &jumpTime, NULL) );
+			pointScan->minStartDelay = jumpTime;
 			break;
 	}
 	

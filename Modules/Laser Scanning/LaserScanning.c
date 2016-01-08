@@ -6343,11 +6343,6 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					// calculate point jump period
 					//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 					
-					// dim panel if there are no more active ROIs
-					GetNumCheckedItems(panel, control, &nROIs);
-					if (!nROIs)
-						SetPanelAttribute(panel, ATTR_DIMMED, TRUE); 
-					
 					break;
 			}
 			 
@@ -8313,6 +8308,8 @@ INIT_ERR
 	if (pointScan->pointScanProtocol->startDelayInitVal <= pointScan->minStartDelay) {
 		pointScan->pointScanProtocol->startDelayInitVal = pointScan->minStartDelay;
 		SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, pointScan->pointScanProtocol->startDelayInitVal);
+		// also, switch to unname protocol
+		SwitchRectRasterPointScanToUnnamedProtocol(rectRaster);
 	}
 	SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_StartDelay, ATTR_MIN_VALUE, pointScan->minStartDelay);  
 
@@ -8602,12 +8599,6 @@ static int SetPointScanProtocolUI (RectRaster_type* rectRaster, BOOL updateProto
 		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_DelProtocol, ATTR_DIMMED, 1);
 		SetCtrlAttribute(rectRaster->baseClass.pointScanPanHndl, PointTab_SaveProtocol, ATTR_DIMMED, 1);
 	}
-	
-	if (ListNumItems(rectRaster->pointScan.pointJumps))
-		SetPanelAttribute(rectRaster->baseClass.pointScanPanHndl, ATTR_DIMMED, FALSE);
-	else
-		// dim point scan panel since there are no points initially
-		SetPanelAttribute(rectRaster->baseClass.pointScanPanHndl, ATTR_DIMMED, TRUE);
 	
 	return 0;
 }
@@ -9164,8 +9155,6 @@ INIT_ERR
 							// update minimum point jump period
 							//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine);
 						
-							// undim panel
-							SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, 0);
 						}
 					
 						break;
@@ -9349,12 +9338,6 @@ INIT_ERR
 	// update jump start delay and minimum jump period
 	NonResRectRasterScan_SetMinimumPointJumpStartDelay(scanEngine);
 	//NonResRectRasterScan_SetMinimumPointJumpPeriod(scanEngine); 
-	
-	if (nPointROIs)
-		SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, FALSE);
-	else
-		SetPanelAttribute(scanEngine->baseClass.pointScanPanHndl, ATTR_DIMMED, TRUE);
-	
 	
 Error:
 

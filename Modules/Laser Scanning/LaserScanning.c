@@ -1382,6 +1382,11 @@ INIT_ERR
 	// Set up Point Scan UI
 	//------------------------------------------------------------------------------------------------------------------------------------------------------ 
 	
+	// populate point jump modes
+	InsertListItem(rectRaster->baseClass.pointScanPanHndl, PointTab_Mode, PointJump_SinglePoints, "Single points", PointJump_SinglePoints);
+	InsertListItem(rectRaster->baseClass.pointScanPanHndl, PointTab_Mode, PointJump_PointGroup, "Point group", PointJump_PointGroup);
+	InsertListItem(rectRaster->baseClass.pointScanPanHndl, PointTab_Mode, PointJump_IncrementalPointGroup, "Incremental point group", PointJump_IncrementalPointGroup);
+	
 	SetPointScanProtocolUI(rectRaster, TRUE);
 	
 	// configure/unconfigure scan engine
@@ -8522,10 +8527,7 @@ static PointScanProtocol_type* copy_PointScanProtocol_type (PointScanProtocol_ty
 
 static int SetPointScanProtocolUI (RectRaster_type* rectRaster, BOOL updateProtocolsUIRing)
 {
-	// populate point jump modes
-	InsertListItem(rectRaster->baseClass.pointScanPanHndl, PointTab_Mode, PointJump_SinglePoints, "Single points", PointJump_SinglePoints);
-	InsertListItem(rectRaster->baseClass.pointScanPanHndl, PointTab_Mode, PointJump_PointGroup, "Point group", PointJump_PointGroup);
-	InsertListItem(rectRaster->baseClass.pointScanPanHndl, PointTab_Mode, PointJump_IncrementalPointGroup, "Incremental point group", PointJump_IncrementalPointGroup);
+	// set point jump mode
 	SetCtrlIndex(rectRaster->baseClass.pointScanPanHndl, PointTab_Mode, (int)rectRaster->pointScan.pointScanProtocol->jumpMethod);
 	SetRectRasterScanEnginePointScanJumpModeUI(rectRaster->baseClass.pointScanPanHndl, rectRaster->pointScan.pointScanProtocol->jumpMethod);
 				

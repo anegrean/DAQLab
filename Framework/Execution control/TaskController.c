@@ -663,6 +663,72 @@ Error:
 RETURN_ERR
 }
 
+int IsTaskTreeInUse_GetLock (TaskControl_type* taskControl, BOOL* inUsePtr, TCStates* tcState, BOOL* lockObtained, int lineNumDebug, char fileNameDebug[], char** errorMsg)
+{
+	INIT_ERR
+	
+	TCStates*			tcStateTSVPtr 	= NULL;
+	TaskControl_type*   taskTreeRootTC 	= GetTaskControlRootParent(taskControl);
+	
+	if (!taskTreeRootTC->stateTSV) {
+		*lockObtained 	= FALSE;
+		*inUsePtr		= FALSE;
+		return 0;
+	}
+	
+	*lockObtained = FALSE;
+	CmtErrChk( CmtGetTSVPtr(taskTreeRootTC->stateTSV, &tcStateTSVPtr) );
+	*lockObtained = TRUE;
+	
+	//-------------------------------------------------------- 
+	// debug
+	taskTreeRootTC->stateTSVLineNumDebug = lineNumDebug;
+	strcpy(taskTreeRootTC->stateTSVFileName, fileNameDebug);
+	//--------------------------------------------------------
+	
+	*inUsePtr = (*tcStateTSVPtr == TC_State_Idle || *tcStateTSVPtr == TC_State_Running || *tcStateTSVPtr == TC_State_IterationFunctionActive || *tcStateTSVPtr == TC_State_Stopping);
+	if (tcState) *tcState = *tcStateTSVPtr;
+	
+CmtError:
+	
+Cmt_ERR
+
+Error:
+	
+RETURN_ERR
+	
+}
+
+int IsTaskTreeInUse_ReleaseLock (TaskControl_type* taskControl, BOOL* lockObtained, char** errorMsg)
+{
+INIT_ERR
+
+	TaskControl_type*   taskTreeRootTC 	= GetTaskControlRootParent(taskControl);
+	
+	if (!taskTreeRootTC->stateTSV) {
+		*lockObtained = TRUE;
+		return 0;
+	}
+	
+	*lockObtained = TRUE;
+	CmtErrChk( CmtReleaseTSVPtr(taskTreeRootTC->stateTSV) );
+	*lockObtained = FALSE;
+	
+	//-------------------------------------------------------- 
+	// debug
+	taskTreeRootTC->stateTSVLineNumDebug = 0;
+	strcpy(taskTreeRootTC->stateTSVFileName, "");
+	//--------------------------------------------------------
+
+CmtError:
+	
+Cmt_ERR
+
+Error:
+	
+RETURN_ERR
+}
+
 //------------------------------------------------------------------------------------------------------------------------------------------------------
 // Task Controller data queue and data exchange functions
 //------------------------------------------------------------------------------------------------------------------------------------------------------

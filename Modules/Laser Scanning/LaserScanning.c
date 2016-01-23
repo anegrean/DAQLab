@@ -579,6 +579,7 @@ typedef struct {
 	
 	RectRasterScanSet_type*		scanSettings;				// Scan settings used to perform a frame scan.
 	RectRasterScanSet_type*		parentFrameScanSettings;	// Parent ROI frame scan settings restored from previous scans used to reference subregion scans defined in scanROIs or point scans.
+	int							subregionIdx;				// Subregion index updated when the user selects a subregion scan ROI. If the index is 0, it is the parent region.
 	double						galvoSamplingRate;			// Default galvo sampling rate set by the scan engine in [Hz].
 	double						flyInDelay;					// Galvo fly-in time from parked position to start of the imaging area in [us]. This value is also an integer multiple of the pixelDwellTime.
 	ListType					scanROIs;					// List of Rect_type* scan ROIs marking subregions to scan within the parent scan area described by the scanSettings.
@@ -1337,8 +1338,8 @@ INIT_ERR
 	
 	// add default parent frame scan ROI
 	InsertListItem(rectRaster->baseClass.frameScanPanHndl, ScanTab_ROIs, 0, "parent", 0);
-	// check default parent frame scan ROI
-	CheckListItem(rectRaster->baseClass.frameScanPanHndl, ScanTab_ROIs, 0, 1);
+	// uncheck default parent frame scan ROI
+	CheckListItem(rectRaster->baseClass.frameScanPanHndl, ScanTab_ROIs, 0, 0);
 				
 	// update height
 	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_Height, rectRaster->scanSettings->height * rectRaster->scanSettings->pixSize);
@@ -4768,8 +4769,8 @@ INIT_ERR
 	nullChk( engine->VChanPixelSamplingRate		= init_SourceVChan_type(pixelSamplingRateVChanName, DL_Double, engine, NULL) ); 	
 	nullChk( engine->VChanNPixels				= init_SourceVChan_type(nPixelsVChanName, DL_UInt64, engine, NULL) ); 	
 	nullChk( engine->objectives					= ListCreate(sizeof(Objective_type*)) ); 
-	nullChk( engine->VChanROIHold				= init_SourceVChan_type(ROIHoldVChanName, DL_Waveform_UShort, engine, NULL) );
-	nullChk( engine->VChanROIShutter			= init_SourceVChan_type(ROIShutterVChanName, DL_Waveform_UShort, engine, NULL) );
+	nullChk( engine->VChanROIHold				= init_SourceVChan_type(ROIHoldVChanName, DL_Waveform_UChar, engine, NULL) );
+	nullChk( engine->VChanROIShutter			= init_SourceVChan_type(ROIShutterVChanName, DL_Waveform_UChar, engine, NULL) );
 	
 	// register Sink VChans with the task controller
 	errChk( AddSinkVChan(engine->taskControl, engine->VChanFastAxisPos, NULL, NULL) );
@@ -5021,30 +5022,38 @@ INIT_ERR
 	
 	double*						parkedFastAxis				= NULL;
 	double*						parkedSlowAxis				= NULL;
+	unsigned char*				closedShutter				= NULL;
 	size_t						nParkedSamples				= (size_t) (engine->galvoSamplingRate * 0.2); // generate 0.2s long parked signal
-	RepeatedWaveform_type*		parkedFastAxisWaveform		= NULL;
-	RepeatedWaveform_type*		parkedSlowAxisWaveform		= NULL;
-	DataPacket_type*			fastAxisDataPacket			= NULL;
-	DataPacket_type*			slowAxisDataPacket			= NULL;
+	RepeatedWaveform_type*		repWaveform					= NULL;
+	DataPacket_type*			dataPacket					= NULL;
 	DSInfo_type*				dsInfo						= NULL;
 	
 	
-	nullChk( parkedFastAxis = malloc(nParkedSamples * sizeof(double)) );
+	// slow axis
 	nullChk( parkedSlowAxis = malloc(nParkedSamples * sizeof(double)) );
-	Set1D(parkedFastAxis, nParkedSamples, ((NonResGalvoCal_type*)engine->baseClass.fastAxisCal)->parked);
 	Set1D(parkedSlowAxis, nParkedSamples, ((NonResGalvoCal_type*)engine->baseClass.slowAxisCal)->parked);
-	nullChk( parkedFastAxisWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, engine->galvoSamplingRate, nParkedSamples, (void**)&parkedFastAxis, 0) );
-	nullChk( parkedSlowAxisWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, engine->galvoSamplingRate, nParkedSamples, (void**)&parkedSlowAxis, 0) );
+	nullChk( repWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, engine->galvoSamplingRate, nParkedSamples, (void**)&parkedSlowAxis, 0) );
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(engine->baseClass.taskControl), WAVERANK) );
-	nullChk( fastAxisDataPacket		= init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedFastAxisWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&repWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
+	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );
+	errChk( SendNullPacket( engine->baseClass.VChanSlowAxisCom, &errorInfo.errMsg) ); // NULL packet to terminate transmission for this channel
+	
+	// fast axis
+	nullChk( parkedFastAxis = malloc(nParkedSamples * sizeof(double)) );
+	Set1D(parkedFastAxis, nParkedSamples, ((NonResGalvoCal_type*)engine->baseClass.fastAxisCal)->parked);
+	nullChk( repWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, engine->galvoSamplingRate, nParkedSamples, (void**)&parkedFastAxis, 0) );
 	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(engine->baseClass.taskControl), WAVERANK) );
-	nullChk( slowAxisDataPacket		= init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&parkedSlowAxisWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
-	// send parked signal data packets
-	errChk( SendDataPacket(engine->baseClass.VChanSlowAxisCom, &slowAxisDataPacket, FALSE, &errorInfo.errMsg) );
-	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &fastAxisDataPacket, FALSE, &errorInfo.errMsg) );    
-	// send NULL packets to terminate AO
-	errChk( SendNullPacket( engine->baseClass.VChanFastAxisCom, &errorInfo.errMsg) );
-	errChk( SendNullPacket( engine->baseClass.VChanSlowAxisCom, &errorInfo.errMsg) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_Double, (void**)&repWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
+	errChk( SendDataPacket(engine->baseClass.VChanFastAxisCom, &dataPacket, FALSE, &errorInfo.errMsg) );    
+	errChk( SendNullPacket( engine->baseClass.VChanFastAxisCom, &errorInfo.errMsg) ); // NULL packet to terminate transmission for this channel
+	
+	// shutter
+	nullChk( closedShutter = calloc(nParkedSamples, sizeof(unsigned char)) );
+	nullChk( repWaveform = init_RepeatedWaveform_type(RepeatedWaveform_UChar, engine->galvoSamplingRate, nParkedSamples, (void**)&closedShutter, 0) );
+	nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(engine->baseClass.taskControl), WAVERANK) );
+	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&repWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
+	errChk( SendDataPacket(engine->baseClass.VChanROIShutter, &dataPacket, FALSE, &errorInfo.errMsg) );
+	errChk( SendNullPacket( engine->baseClass.VChanROIShutter, &errorInfo.errMsg) ); // NULL packet to terminate transmission for this channel
 	
 	return 0;
 	
@@ -5053,10 +5062,9 @@ Error:
 	// cleanup
 	OKfree(parkedFastAxis);
 	OKfree(parkedSlowAxis);
-	discard_RepeatedWaveform_type(&parkedFastAxisWaveform);
-	discard_RepeatedWaveform_type(&parkedSlowAxisWaveform);
-	discard_DataPacket_type(&fastAxisDataPacket);
-	discard_DataPacket_type(&slowAxisDataPacket);
+	OKfree(closedShutter);
+	discard_RepeatedWaveform_type(&repWaveform);
+	discard_DataPacket_type(&dataPacket);
 	discard_DSInfo_type(&dsInfo);
 	
 RETURN_ERR	
@@ -5150,6 +5158,7 @@ INIT_ERR
 	
 	// parent frame scan settings 
 	rectRaster->parentFrameScanSettings			= NULL;
+	rectRaster->subregionIdx					= 0;
 	
 	rectRaster->galvoSamplingRate				= galvoSamplingRate;
 	rectRaster->flyInDelay						= 0;
@@ -5218,8 +5227,8 @@ INIT_ERR
 	nullChk( rectRaster->scanROIs = ListCreate(sizeof(Rect_type*)) );
 	
 	// Add parent frame scan ROI to frame scan ROI list
-	RGBA_type	parentRectROIColor	= {.R = 0, .G = 0, .B = 0, .alpha = 255}; // transparent
-	nullChk( parentROIRect = initalloc_Rect_type(NULL, "parent", parentRectROIColor, TRUE, 0, 0, rectRaster->scanSettings->height, rectRaster->scanSettings->width) );
+	RGBA_type	parentRectROIColor	= {.R = 0, .G = 255, .B = 0, .alpha = 0};
+	nullChk( parentROIRect = initalloc_Rect_type(NULL, "parent", parentRectROIColor, FALSE, 0, 0, rectRaster->scanSettings->height, rectRaster->scanSettings->width) );
 	nullChk( ListInsertItem(rectRaster->scanROIs, &parentROIRect, END_OF_LIST) );
 	parentROIRect = NULL;
 	
@@ -5537,7 +5546,8 @@ INIT_ERR
 					// update width
 					scanEngine->scanSettings->width = widthPix;
 					Fmt(widthString, "%s<%f[p1]", width);  
-					SetCtrlVal(panel, control, widthString); 
+					SetCtrlVal(panel, control, widthString);
+					
 					// update pixel dwell times
 					errChk( NonResRectRasterScan_PixelDwellTimes(scanEngine, &errorInfo.errMsg) ); 
 					
@@ -5723,8 +5733,8 @@ INIT_ERR
 					ListRemoveItem(scanEngine->scanROIs, 0, itemIdx + 1);
 					
 					// update subregion scan settings to be in sync with the UI after deleting a list entry
-					GetCtrlIndex(panel, control, &itemIdx);
-					errChk( NonResRectRasterScan_SetSubregionFrameScan(scanEngine, itemIdx + 1, &errorInfo.errMsg) );
+					GetCtrlIndex(panel, control, &scanEngine->subregionIdx);
+					errChk( NonResRectRasterScan_SetSubregionFrameScan(scanEngine, scanEngine->subregionIdx + 1, &errorInfo.errMsg) );
 					
 					break;
 					
@@ -5737,12 +5747,11 @@ INIT_ERR
 					
 				case ScanTab_ROIs:
 					
-					int	itemIdx	= 0;
-					
-					GetCtrlIndex(panel, control, &itemIdx);
-					errChk( NonResRectRasterScan_SetSubregionFrameScan(scanEngine, itemIdx + 1, &errorInfo.errMsg) );
+					GetCtrlIndex(panel, control, &scanEngine->subregionIdx);
+					errChk( NonResRectRasterScan_SetSubregionFrameScan(scanEngine, scanEngine->subregionIdx + 1, &errorInfo.errMsg) );
 					break;
 			}
+			break;
 			
 		case EVENT_MARK_STATE_CHANGE:
 			
@@ -7002,6 +7011,18 @@ INIT_ERR
 	nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&shutterScan_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) );
 	errChk( SendDataPacket(scanEngine->baseClass.VChanROIShutter, &dataPacket, FALSE, &errorInfo.errMsg) );
 	
+	// close shutter if finite frame scan mode
+	if (GetTaskControlMode(scanEngine->baseClass.taskControl) == TASK_FINITE) {
+		// generate one sample
+		nullChk( shutterScanSignal = calloc(1, sizeof(unsigned char)) );
+		nullChk( shutterScan_RepWaveform = init_RepeatedWaveform_type(RepeatedWaveform_Double, scanEngine->galvoSamplingRate, 1, (void**)&shutterScanSignal, 0) );
+		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
+		nullChk( dataPacket = init_DataPacket_type(DL_RepeatedWaveform_UChar, (void**)&shutterScan_RepWaveform, &dsInfo, (DiscardFptr_type)discard_RepeatedWaveform_type) ); 
+		errChk( SendDataPacket(scanEngine->baseClass.VChanROIShutter, &dataPacket, FALSE, &errorInfo.errMsg) );    
+		// send NULL packet to signal termination of data stream
+		errChk( SendNullPacket(scanEngine->baseClass.VChanROIShutter, &errorInfo.errMsg) );
+	}
+	
 	//---------------------------------------------------------------------------------------------------------------------------
 	// 													Pixel timing info
 	//---------------------------------------------------------------------------------------------------------------------------
@@ -7100,8 +7121,8 @@ INIT_ERR
 	double*					fastAxisJumpSignal				= NULL;
 	double*					slowAxisJumpSignal				= NULL;
 	double*					pixelSamplingRatePtr			= NULL;
-	unsigned short*			ROIHoldSignal					= NULL;
-	unsigned short*			ROIShutterSignal				= NULL;
+	unsigned char*			ROIHoldSignal					= NULL;
+	unsigned char*			ROIShutterSignal				= NULL;
 	uInt64*					nGalvoSamplesPtr				= NULL;
 	double*					galvoSamplingRatePtr			= NULL;
 	uInt64					nPixels							= 0;
@@ -7121,7 +7142,7 @@ INIT_ERR
 	RepeatedWaveform_type*	fastAxisJumpWaveform			= NULL;
 	RepeatedWaveform_type*	slowAxisJumpWaveform			= NULL;
 	Waveform_type*			ROIHoldWaveform					= NULL;
-	Waveform_type*			ROIShutterWaveform			= NULL;
+	Waveform_type*			ROIShutterWaveform				= NULL;
 	
 	
 	//-----------------------------------------------
@@ -7262,14 +7283,14 @@ INIT_ERR
 	
 		// hold timing signal
 		if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIHold)) {
-			nullChk( ROIHoldSignal = realloc(ROIHoldSignal, nGalvoJumpSamples * sizeof(unsigned short)) );
+			nullChk( ROIHoldSignal = realloc(ROIHoldSignal, nGalvoJumpSamples * sizeof(unsigned char)) );
 			for (size_t i = nPreviousGalvoJumpSamples; i < nPreviousGalvoJumpSamples + nNewGalvoJumpSamples; i++)
 				ROIHoldSignal[i] = 0;
 		}
 	
 		// stimulation timing signal
 		if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIShutter)) {
-			nullChk( ROIShutterSignal = realloc(ROIShutterSignal, nGalvoJumpSamples * sizeof(unsigned short)) );
+			nullChk( ROIShutterSignal = realloc(ROIShutterSignal, nGalvoJumpSamples * sizeof(unsigned char)) );
 			for (size_t i = nPreviousGalvoJumpSamples; i < nPreviousGalvoJumpSamples + nNewGalvoJumpSamples; i++)
 				ROIShutterSignal[i] = 0;
 		}
@@ -7343,12 +7364,12 @@ INIT_ERR
 	
 	// generate ROI hold waveform
 	if (ROIHoldSignal) {
-		nullChk( ROIHoldWaveform = init_Waveform_type(Waveform_UShort, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&ROIHoldSignal) );
+		nullChk( ROIHoldWaveform = init_Waveform_type(Waveform_UChar, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&ROIHoldSignal) );
 	}
 	
 	// generate ROI stimulate waveform
 	if (ROIShutterSignal) {
-		nullChk( ROIShutterWaveform = init_Waveform_type(Waveform_UShort, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&ROIShutterSignal) );
+		nullChk( ROIShutterWaveform = init_Waveform_type(Waveform_UChar, scanEngine->galvoSamplingRate, nGalvoJumpSamples, (void**)&ROIShutterSignal) );
 	}
 	
 	
@@ -7372,7 +7393,7 @@ INIT_ERR
 	// ROI hold
 	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIHold)) {
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, (void**)&ROIHoldWaveform, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
+		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, (void**)&ROIHoldWaveform, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanROIHold, &dataPacket, FALSE, &errorInfo.errMsg) );
 		errChk( SendNullPacket(scanEngine->baseClass.VChanROIHold, &errorInfo.errMsg) );
 	}
@@ -7380,7 +7401,7 @@ INIT_ERR
 	// ROI stimulate
 	if (IsVChanOpen((VChan_type*)scanEngine->baseClass.VChanROIShutter)) {
 		nullChk( dsInfo = GetIteratorDSData(GetTaskControlIterator(scanEngine->baseClass.taskControl), WAVERANK) );
-		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UShort, (void**)&ROIShutterWaveform, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
+		nullChk( dataPacket = init_DataPacket_type(DL_Waveform_UChar, (void**)&ROIShutterWaveform, &dsInfo, (DiscardFptr_type)discard_Waveform_type) );
 		errChk( SendDataPacket(scanEngine->baseClass.VChanROIShutter, &dataPacket, FALSE, &errorInfo.errMsg) );
 		errChk( SendNullPacket(scanEngine->baseClass.VChanROIShutter, &errorInfo.errMsg) );
 	}
@@ -7549,6 +7570,7 @@ INIT_ERR
 	ListType					pointJumpROIList 			= 0;
 	ListType					frameScanROIList			= 0;
 	ListType					ROIList						= 0;
+	Rect_type*					parentRectCopy 				= NULL;
 	
 	
 	do {
@@ -7755,16 +7777,27 @@ INIT_ERR
 				// TEMPORARY: X, Y & Z coordinates set to 0 for now
 				SetImageCoord(imgBuffer->image, 0, 0, 0);
 				
-				// add stored point and frame scan ROIs if any
-				nullChk( pointJumpROIList = CopyROIList(rectRaster->pointScan.pointJumps) );
-				nullChk( frameScanROIList = CopyROIList(rectRaster->scanROIs) );
-				nullChk( ROIList = ListCreate(sizeof(ROI_type*)) );
-				nullChk( ListAppend(ROIList, pointJumpROIList) );
-				OKfreeList(&pointJumpROIList, NULL);
-				nullChk( ListAppend(ROIList, frameScanROIList) );
-				OKfreeList(&frameScanROIList, NULL);
-				SetImageROIs(imgBuffer->image, ROIList);
-				ROIList = 0;
+				// add stored point and frame scan ROIs if selected scan region is a parent region
+				if (!rectRaster->subregionIdx) {
+					nullChk( pointJumpROIList = CopyROIList(rectRaster->pointScan.pointJumps) );
+					nullChk( frameScanROIList = CopyROIList(rectRaster->scanROIs) );
+					nullChk( ROIList = ListCreate(sizeof(ROI_type*)) );
+					nullChk( ListAppend(ROIList, pointJumpROIList) );
+					OKfreeList(&pointJumpROIList, NULL);
+					nullChk( ListAppend(ROIList, frameScanROIList) );
+					OKfreeList(&frameScanROIList, NULL);
+					SetImageROIs(imgBuffer->image, ROIList);
+					ROIList = 0;
+				} else {
+					// copy only parent ROI
+					Rect_type*	parentRect 		= *(Rect_type**)ListGetPtrToItem(rectRaster->scanROIs, 1); // get parent rect ROI
+					
+					nullChk( ROIList = ListCreate(sizeof(ROI_type*)) );
+					nullChk( parentRectCopy = (*parentRect->baseClass.copyFptr) ((void*)parentRect) );
+					ListInsertItem(ROIList, &parentRectCopy, END_OF_LIST);
+					SetImageROIs(imgBuffer->image, ROIList);
+					ROIList = 0;
+				}
 				
 				//-------------------------------------
 				// Update image display callback group
@@ -7977,6 +8010,7 @@ Error:
 	OKfreeList(&pointJumpROIList, (DiscardFptr_type)discard_PointJump_type);
 	OKfreeList(&frameScanROIList, (DiscardFptr_type)discard_Rect_type);
 	OKfreeList(&ROIList, (DiscardFptr_type)discard_ROI_type);
+	discard_Rect_type(&parentRectCopy);
 	
 	if (imgDisplayPtr) {
 		CmtReleaseTSVPtr(imgBuffer->scanChan->imgDisplayTSV);

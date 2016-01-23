@@ -199,6 +199,9 @@ static double						GetPockellsCellVoltage								(PockellsEOMCal_type* eomCal, d
 // VChan callbacks
 //-----------------------------------------
 
+	// Timing VChan
+static void							TimingVChan_StateChange 							(VChan_type* self, void* VChanOwner, VChanStates state);
+
 	// Modulation VChan
 static void							ModulationVChan_StateChange							(VChan_type* self, void* VChanOwner, VChanStates state);
 
@@ -373,7 +376,7 @@ INIT_ERR
 	
 	DLDataTypes		timingVChanDataTypes[] = PockellsEOM_VChan_Timing_DataTypes;
 	
-	nullChk( eom->timingVChan  		= init_SinkVChan_type(timingVChanName, timingVChanDataTypes, NumElem(timingVChanDataTypes), eom, VChanDataTimeout, NULL) );
+	nullChk( eom->timingVChan  		= init_SinkVChan_type(timingVChanName, timingVChanDataTypes, NumElem(timingVChanDataTypes), eom, VChanDataTimeout, TimingVChan_StateChange) );
 	nullChk( eom->modulationVChan	= init_SourceVChan_type(modulationVChanName, DL_RepeatedWaveform_Double, eom, ModulationVChan_StateChange) );
 	
 	// cleanup
@@ -568,12 +571,14 @@ INIT_ERR
 	
 	nullChk( taskController = init_TaskControl_type(taskControllerName, NULL, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, 
 									  StartTC, ResetTC, DoneTC, StoppedTC, NULL, TaskTreeStateChange, NULL, ModuleEventHandler, ErrorTC) );
-	// configure task controller
-	errChk( TaskControlEvent(taskController, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
+	
+	OKfree(taskControllerName);
 	
 	nullChk( eom = init_PockellsEOM_type(eomModule, &taskController) );
 	
-	OKfree(taskControllerName);
+	// configure task controller
+	SetTaskControlIterations(eom->taskControl, 1);
+	errChk( TaskControlEvent(eom->taskControl, TC_Event_Configure, NULL, NULL, &errorInfo.errMsg) );
 	
 	eom->calibIdx 			= calibIdx;
 	eom->maxSafeVoltage 	= maxSafeVoltage;
@@ -1352,10 +1357,12 @@ static int CVICALLBACK PockellsControl_CB (int panel, int control, int event, vo
 {
 INIT_ERR	
 	
-	PockellsEOM_type*  		eom				= callbackData;
-	PockellsEOMCal_type*	eomCal			= NULL;
-	int						wavelengthIdx	= 0;
-	Point					cell			= {.x = 0, .y = 0};
+	PockellsEOM_type*  		eom							= callbackData;
+	PockellsEOMCal_type*	eomCal						= NULL;
+	int						wavelengthIdx				= 0;
+	Point					cell						= {.x = 0, .y = 0};
+	BOOL					taskTreeInUse				= FALSE;
+	BOOL					taskTreeStateLockObtained	= FALSE;
 	
 	
 	switch (event) {
@@ -1386,30 +1393,37 @@ INIT_ERR
 					
 				case Pockells_Output:
 					
+					errChk( IsTaskTreeInUse_GetLock(eom->taskControl, &taskTreeInUse, NULL, &taskTreeStateLockObtained, __LINE__, __FILE__, &errorInfo.errMsg) ); 
+					
+					// update voltages in the data structure
 					if (eom->isPulsed) {
 						// set voltage to get desired beam intensity
 						GetCtrlVal(panel, control, &eom->pulsedOutputPower);
 						eom->pulsedOutputPower /= eomCal->maxPower;
-						
 						if (eom->calibPanHndl) {
 							cell.x = CalibTableColIdx_CurrentPower;
 							cell.y = wavelengthIdx + 1;
 							SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eom->pulsedOutputPower * eomCal->maxPower);
 						}
-						
 					} else {
 						// apply voltage to get desired beam intensity
 						GetCtrlVal(panel, control, &eom->outputPower);
 						eom->outputPower /= eomCal->maxPower;
-						
+					
 						if (eom->calibPanHndl) {
 							cell.x = CalibTableColIdx_CurrentPower;
 							cell.y = wavelengthIdx + 1;
 							SetTableCellVal(eom->calibPanHndl, Calib_Table, cell, eom->outputPower * eomCal->maxPower);
 						}
 						
-						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errorInfo.errMsg) );
 					}
+					
+					// generate output signal only if task tree is not in use and if not in pulsed mode
+					if (!taskTreeInUse && !eom->isPulsed) {
+						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errorInfo.errMsg) );	
+					}
+					
+					errChk( IsTaskTreeInUse_ReleaseLock (eom->taskControl, &taskTreeStateLockObtained, &errorInfo.errMsg) );
 					
 					break;
 					
@@ -1417,16 +1431,11 @@ INIT_ERR
 					
 					GetCtrlVal(panel, control, &eom->isPulsed);
 					if (eom->isPulsed) {
-						// enable task controller to iterate once
-						SetTaskControlIterations(eom->taskControl, 1);
 						// apply pockels voltage for min transmission
 						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eomCal->d), &errorInfo.errMsg) );
 						// update UI with current pulsed power settings
 						SetCtrlVal(panel, Pockells_Output, eom->pulsedOutputPower * eomCal->maxPower);
 					} else {
-						// disable task controller iterations
-						// enable task controller to iterate once
-						SetTaskControlIterations(eom->taskControl, 0);
 						// apply voltage to get desired beam intensity
 						errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errorInfo.errMsg) );
 						// update UI
@@ -1441,6 +1450,11 @@ INIT_ERR
 	}
 	
 Error:
+	
+	// cleanup
+	if (taskTreeStateLockObtained)
+		IsTaskTreeInUse_ReleaseLock (eom->taskControl, &taskTreeStateLockObtained, &errorInfo.errMsg);
+		
 
 PRINT_ERR
 
@@ -1492,6 +1506,32 @@ static double GetPockellsCellVoltage (PockellsEOMCal_type* eomCal, double normal
 //-----------------------------------------
 // VChan callbacks
 //-----------------------------------------
+
+// Timing VChan
+static void	TimingVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
+{
+INIT_ERR
+	
+	PockellsEOM_type* 		eom 	= VChanOwner;
+	
+	/*
+	switch (state) {
+			
+		case VChan_Open:
+			
+			// if the Timing VChan is open, then activate the Modulation VChan
+			SetVChanActive(eom->modulationVChan, TRUE);
+			break;
+			
+		case VChan_Closed:
+			
+			// if the Timing VChan is closed, then inactivate the Modulation VChan
+			SetVChanActive(eom->modulationVChan, FALSE);
+			break;
+	}
+	*/
+}
+
 
 // Modulation VChan
 static void	ModulationVChan_StateChange (VChan_type* self, void* VChanOwner, VChanStates state)
@@ -1581,7 +1621,7 @@ INIT_ERR
 	RepeatedWaveform_type* 		commandRepeatedWaveform		= NULL;
 	RepeatedWaveform_type* 		repeatedWaveformIN			= NULL;
 	size_t						nSamples					= 0;
-	double						voltageHigh					= GetPockellsCellVoltage(eomCal, eom->pulsedOutputPower);
+	double						voltageHigh					= 0; // determined by the operation mode
 	double						voltageLow					= GetPockellsCellVoltage(eomCal, eomCal->d);
 	double						samplingRate				= 0;
 	double						nRepeats					= 0;
@@ -1600,14 +1640,21 @@ INIT_ERR
 	ssize_t*					timingSignal_SSize			= NULL;
 	size_t*						timingSignal_Size			= NULL;
 	
-	// if there is no Source VChan attached to the timing Sink VChan of the pockells cell or not in pulsed mode, then just send constant voltage waveform
-	if (!IsVChanOpen((VChan_type*)eom->timingVChan) || !eom->isPulsed) {
+	// if timing Sink VChan is closed then just send constant voltage waveform
+	if (!IsVChanOpen((VChan_type*)eom->timingVChan)) {
 		errChk( ApplyPockellsCellVoltage(eom, GetPockellsCellVoltage(eomCal, eom->outputPower), &errorInfo.errMsg) );
 		// send NULL packet as well to signal termination of transmission
 		errChk( SendDataPacket(eom->modulationVChan, &nullDataPacket, FALSE, &errorInfo.errMsg) ); 
 		errChk( TaskControlIterationDone(taskControl, 0, "", FALSE, &errorInfo.errMsg) );
 		return;
 	}
+	
+	// choose between high voltage levels for normal (imaging) mode and pulsed mode
+	if (eom->isPulsed)
+		voltageHigh	= GetPockellsCellVoltage(eomCal, eom->pulsedOutputPower);
+	else
+		voltageHigh	= GetPockellsCellVoltage(eomCal, eom->outputPower);
+		
 	
 	errChk( GetDataPacket(eom->timingVChan, &dataPacketIN, &errorInfo.errMsg) );
 	

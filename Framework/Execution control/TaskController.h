@@ -278,11 +278,18 @@ BOOL					GetTaskControlAbortFlag				(TaskControl_type* taskControl);
 BOOL					GetTaskControlIterationStopFlag		(TaskControl_type* taskControl);
 
 	// Checks if a Task Controller is in use, i.e. if it is in any of the following states: Idle, Running, IterationFunctionActive, Stopping.
-	// A call to this function blocks ongoing state transitions and if TC use knowledge is not needed anymore, this call must be followed each time 
+	// A call to this function blocks ongoing state transitions and if TC state knowledge is not needed anymore, this call must be followed each time 
 	// it is called by GetTaskControlState_ReleaseLock. On success returns 0 and sets lockObtained to TRUE, on failure returns a negative number and sets lockObtained to FALSE.
 int 					IsTaskControllerInUse_GetLock 		(TaskControl_type* taskControl, BOOL* inUsePtr, TCStates* tcState, BOOL* lockObtained, int lineNumDebug, char fileNameDebug[], char** errorMsg);
-	// Releases isTaskControllerInUse lock so state transitions maye resume. On success returns 0 and lockObtained is set back to FALSE. On failure returns a negative value and lockObtained remains TRUE. 
+	// Releases IsTaskControllerInUse lock so state transitions maye resume. On success returns 0 and lockObtained is set back to FALSE. On failure returns a negative value and lockObtained remains TRUE. 
 int 					IsTaskControllerInUse_ReleaseLock 	(TaskControl_type* taskControl, BOOL* lockObtained, char** errorMsg);
+
+	// Check if the task tree of a given task controller is in use, i.e. if the root task controller is in any of the following states: Idle, Running, IterationFunctionActive, Stopping.
+	// A call to this function blocks ongoing state transitions and if task tree state knowledge is not needed anymore, this call must be followed each time 
+	// it is called by IsTaskTreeInUse_ReleaseLock. On success returns 0 and sets lockObtained to TRUE, on failure returns a negative number and sets lockObtained to FALSE.
+int 					IsTaskTreeInUse_GetLock 			(TaskControl_type* taskControl, BOOL* inUsePtr, TCStates* tcState, BOOL* lockObtained, int lineNumDebug, char fileNameDebug[], char** errorMsg);
+	// Releases IsTaskTreeInUse lock so state transitions maye resume. On success returns 0 and lockObtained is set back to FALSE. On failure returns a negative value and lockObtained remains TRUE.
+int 					IsTaskTreeInUse_ReleaseLock 		(TaskControl_type* taskControl, BOOL* lockObtained, char** errorMsg);
 
 	// Converts a task Controller state ID into a string
 char*					TaskControlStateToString			(TCStates state);

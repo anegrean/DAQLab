@@ -495,6 +495,7 @@ typedef struct {
 
 
 typedef struct {
+	char*						name;						// Name for the scan settings below.
 	double						pixSize;					// Image pixel size in [um].
 	uInt32						height;						// Image height in [pix] when viewed on the screen.
 	int							heightOffset;				// Image height offset from center in [pix].
@@ -793,13 +794,18 @@ static int 								SendScanAxisCommand									(ScanEngine_type* engine, RasterS
 	// Non-Resonant Rectangle Raster Scan
 	//--------------------------------------
 
-static RectRasterScanSet_type*			init_RectRasterScanSet_type							(double pixSize, uInt32 height, int heightOffset, uInt32 width, int widthOffset, double pixelDwellTime); 
+static RectRasterScanSet_type*			init_RectRasterScanSet_type							(char name[], double pixSize, uInt32 height, int heightOffset, uInt32 width, int widthOffset, double pixelDwellTime); 
 
 static void 							discard_RectRasterScanSet_type 						(RectRasterScanSet_type** scanSetPtr);
 
+static RectRasterScanSet_type*			copy_RectRasterScanSet_type							(RectRasterScanSet_type* scanSet);
+
+	// returns True if the scan settings between two RectRasterScanSet_type is the same, False otherwise.
+static BOOL								compare_RectRasterScanSet_type						(RectRasterScanSet_type* scanSet1, RectRasterScanSet_type* scanSet2);
+
 	// scan engine image display callback data binding
 static RectRasterDisplayCBData_type* 	init_RectRasterDisplayCBData_type 					(RectRaster_type* scanEngine, size_t scanChanIdx);
-static void 							discard_RectRasterDisplayCBData_type 				(RectRasterDisplayCBData_type** dataPtr);
+static void 							discard_RectRasterDisplayCBData_type 				(RectRasterDisplayCBData_type** rectRasterDispCBDataPtr);
 
 static RectRaster_type*					init_RectRaster_type								(LaserScanning_type*		lsModule, 
 																			 	 	 		char 						engineName[],
@@ -2243,7 +2249,7 @@ INIT_ERR
 	if (!width) width = 1;
 	
 	
-	nullChk( frameScanSettings = init_RectRasterScanSet_type(pixelSize, height, heightOffset, width, widthOffset, pixelDwellTime) );
+	nullChk( frameScanSettings = init_RectRasterScanSet_type("default", pixelSize, height, heightOffset, width, widthOffset, pixelDwellTime) );
 	
 	*scanSetPtr = frameScanSettings;
 	frameScanSettings = NULL;
@@ -2844,7 +2850,7 @@ INIT_ERR
 					
 						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
 					
-							frameScanSettings = init_RectRasterScanSet_type(NonResGalvoRasterScan_Default_PixelSize, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelDwellTime); 
+							frameScanSettings = init_RectRasterScanSet_type("default", NonResGalvoRasterScan_Default_PixelSize, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelDwellTime); 
 							
 							pointScanProtocol = init_PointScanProtocol_type("", NonResGalvoRasterScan_Default_HoldTime, 1, 0, 0, 0, NonResGalvoRasterScan_Default_StimPulseONDuration, 
 									 NonResGalvoRasterScan_Default_StimPulseOFFDuration, 1, PointJump_SinglePoints, FALSE, FALSE, 1, 1, 0, 0, 0);
@@ -5070,12 +5076,13 @@ Error:
 RETURN_ERR	
 }
 
-static RectRasterScanSet_type* init_RectRasterScanSet_type (double pixSize, uInt32 height, int heightOffset, uInt32 width, int widthOffset, double pixelDwellTime)
+static RectRasterScanSet_type* init_RectRasterScanSet_type (char name[], double pixSize, uInt32 height, int heightOffset, uInt32 width, int widthOffset, double pixelDwellTime)
 {
 	RectRasterScanSet_type*	scanSet = malloc(sizeof(RectRasterScanSet_type));
 	if (!scanSet) return NULL;
 	
 	// init
+	scanSet->name			= StrDup(name);
 	scanSet->pixSize 		= pixSize;
 	scanSet->height 		= height;
 	scanSet->heightOffset 	= heightOffset;
@@ -5088,7 +5095,31 @@ static RectRasterScanSet_type* init_RectRasterScanSet_type (double pixSize, uInt
 
 static void discard_RectRasterScanSet_type (RectRasterScanSet_type** scanSetPtr)
 {
+	RectRasterScanSet_type*	scanSet = *scanSetPtr;
+	
+	OKfree(scanSet->name);
+	
 	OKfree(*scanSetPtr);
+}
+
+static RectRasterScanSet_type* copy_RectRasterScanSet_type (RectRasterScanSet_type* scanSet)
+{
+	RectRasterScanSet_type*	scanSetCopy = malloc(sizeof(RectRasterScanSet_type));
+	if (!scanSetCopy || !scanSet) return NULL;
+	
+	// shallow copy
+	*scanSetCopy 		= *scanSet;
+				   
+	// deep copy
+	scanSetCopy->name	= StrDup(scanSet->name);
+	
+	return scanSetCopy;
+}
+
+static BOOL compare_RectRasterScanSet_type (RectRasterScanSet_type* scanSet1, RectRasterScanSet_type* scanSet2)
+{
+	return scanSet1->height == scanSet2->height &&  scanSet1->width == scanSet2->width && scanSet1->heightOffset == scanSet2->heightOffset && \
+		   scanSet1->widthOffset == scanSet2->widthOffset && scanSet1->pixSize == scanSet2->pixSize && scanSet1->pixelDwellTime == scanSet2->pixelDwellTime;
 }
 
 static RectRasterDisplayCBData_type* init_RectRasterDisplayCBData_type (RectRaster_type* scanEngine, size_t scanChanIdx)
@@ -5097,15 +5128,21 @@ static RectRasterDisplayCBData_type* init_RectRasterDisplayCBData_type (RectRast
 	if (!binding) return NULL;
 	
 	binding->scanEngine		= scanEngine;
-	binding->scanSettings   = scanEngine->scanSettings;
+	binding->scanSettings   = copy_RectRasterScanSet_type(scanEngine->scanSettings);
 	binding->scanChanIdx	= scanChanIdx;
 	
 	return binding;
 }
 
-static void discard_RectRasterDisplayCBData_type (RectRasterDisplayCBData_type** dataPtr)
+static void discard_RectRasterDisplayCBData_type (RectRasterDisplayCBData_type** rectRasterDispCBDataPtr)
 {
-	OKfree(*dataPtr);	
+	RectRasterDisplayCBData_type*	rectRasterDispCBData = *rectRasterDispCBDataPtr;
+	
+	if (!rectRasterDispCBData) return;
+	
+	discard_RectRasterScanSet_type(&rectRasterDispCBData->scanSettings);
+	
+	OKfree(*rectRasterDispCBDataPtr);	
 }
 
 static RectRaster_type* init_RectRaster_type (	LaserScanning_type*			lsModule,
@@ -5222,7 +5259,7 @@ INIT_ERR
 	//-----------------------------
 	
 	// parent frame scan settings 
-	nullChk( rectRaster->parentFrameScanSettings = init_RectRasterScanSet_type(rectRaster->scanSettings->pixSize, rectRaster->scanSettings->height, rectRaster->scanSettings->heightOffset, rectRaster->scanSettings->width, rectRaster->scanSettings->widthOffset, rectRaster->scanSettings->pixelDwellTime) );
+	nullChk( rectRaster->parentFrameScanSettings = init_RectRasterScanSet_type(rectRaster->scanSettings->name, rectRaster->scanSettings->pixSize, rectRaster->scanSettings->height, rectRaster->scanSettings->heightOffset, rectRaster->scanSettings->width, rectRaster->scanSettings->widthOffset, rectRaster->scanSettings->pixelDwellTime) );
 	
 	nullChk( rectRaster->scanROIs = ListCreate(sizeof(Rect_type*)) );
 	
@@ -5742,6 +5779,7 @@ INIT_ERR
 			break;
 			
 		case EVENT_VAL_CHANGED:
+		case EVENT_GOT_FOCUS:
 			
 			switch (control) {
 					
@@ -5800,9 +5838,18 @@ INIT_ERR
 	
 	// adjust scan engine scan settings
 	rectRaster->scanSettings->height			= rectROI->height;
-	rectRaster->scanSettings->heightOffset 		= (rectROI->height + 2 * rectROI->top - (int)rectRaster->parentFrameScanSettings->height)/2;
 	rectRaster->scanSettings->width				= rectROI->width;
-	rectRaster->scanSettings->widthOffset		= (rectROI->width + 2 * rectROI->left - (int)rectRaster->parentFrameScanSettings->width)/2;
+	
+	if (subregionIdx == 1) {
+		// parent ROI idx
+		rectRaster->scanSettings->heightOffset 	= (rectROI->height + 2 * rectROI->top - (int)rectRaster->parentFrameScanSettings->height)/2;
+		rectRaster->scanSettings->widthOffset	= (rectROI->width + 2 * rectROI->left - (int)rectRaster->parentFrameScanSettings->width)/2;
+	} else {
+		// child ROI idx
+		rectRaster->scanSettings->heightOffset 	= (rectROI->height + 2 * rectROI->top - (int)rectRaster->parentFrameScanSettings->height)/2 + rectRaster->parentFrameScanSettings->heightOffset;
+		rectRaster->scanSettings->widthOffset	= (rectROI->width + 2 * rectROI->left - (int)rectRaster->parentFrameScanSettings->width)/2 + rectRaster->parentFrameScanSettings->widthOffset;
+	}
+	
 	rectRaster->scanSettings->pixSize			= rectRaster->parentFrameScanSettings->pixSize;
 	rectRaster->scanSettings->pixelDwellTime	= rectRaster->parentFrameScanSettings->pixelDwellTime;
 	
@@ -5813,6 +5860,7 @@ INIT_ERR
 	// height
 	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_Height, rectRaster->scanSettings->height * rectRaster->scanSettings->pixSize);
 	// width
+	errChk( NonResRectRasterScan_ScanWidths(rectRaster, &errorInfo.errMsg) );
 	char widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
 	Fmt(widthString, "%s<%f[p1]", rectRaster->scanSettings->width * rectRaster->scanSettings->pixSize);
 	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_Width, widthString); 
@@ -7570,7 +7618,7 @@ INIT_ERR
 	ListType					pointJumpROIList 			= 0;
 	ListType					frameScanROIList			= 0;
 	ListType					ROIList						= 0;
-	Rect_type*					parentRectCopy 				= NULL;
+	Rect_type*					parentRect	 				= NULL;
 	
 	
 	do {
@@ -7777,8 +7825,8 @@ INIT_ERR
 				// TEMPORARY: X, Y & Z coordinates set to 0 for now
 				SetImageCoord(imgBuffer->image, 0, 0, 0);
 				
-				// add stored point and frame scan ROIs if selected scan region is a parent region
-				if (!rectRaster->subregionIdx) {
+				// add stored point and frame scan ROIs if scan settings match the parent ROI settings
+				if (compare_RectRasterScanSet_type(rectRaster->scanSettings, rectRaster->parentFrameScanSettings)) {
 					nullChk( pointJumpROIList = CopyROIList(rectRaster->pointScan.pointJumps) );
 					nullChk( frameScanROIList = CopyROIList(rectRaster->scanROIs) );
 					nullChk( ROIList = ListCreate(sizeof(ROI_type*)) );
@@ -7789,12 +7837,15 @@ INIT_ERR
 					SetImageROIs(imgBuffer->image, ROIList);
 					ROIList = 0;
 				} else {
-					// copy only parent ROI
-					Rect_type*	parentRect 		= *(Rect_type**)ListGetPtrToItem(rectRaster->scanROIs, 1); // get parent rect ROI
+					// add new frame scan settings as parent ROI
+					RGBA_type	parentRectROIColor	= {.R = 0, .G = 255, .B = 0, .alpha = 0};
+					Rect_type*	parentRect 			= NULL;
 					
+					nullChk( parentRect = initalloc_Rect_type(NULL, "parent", parentRectROIColor, FALSE, 0, \
+												  					  0, rectRaster->scanSettings->height, rectRaster->scanSettings->width) );
 					nullChk( ROIList = ListCreate(sizeof(ROI_type*)) );
-					nullChk( parentRectCopy = (*parentRect->baseClass.copyFptr) ((void*)parentRect) );
-					ListInsertItem(ROIList, &parentRectCopy, END_OF_LIST);
+					ListInsertItem(ROIList, &parentRect, END_OF_LIST);
+					parentRect = NULL;
 					SetImageROIs(imgBuffer->image, ROIList);
 					ROIList = 0;
 				}
@@ -8010,7 +8061,7 @@ Error:
 	OKfreeList(&pointJumpROIList, (DiscardFptr_type)discard_PointJump_type);
 	OKfreeList(&frameScanROIList, (DiscardFptr_type)discard_Rect_type);
 	OKfreeList(&ROIList, (DiscardFptr_type)discard_ROI_type);
-	discard_Rect_type(&parentRectCopy);
+	discard_Rect_type(&parentRect);
 	
 	if (imgDisplayPtr) {
 		CmtReleaseTSVPtr(imgBuffer->scanChan->imgDisplayTSV);
@@ -9357,9 +9408,9 @@ INIT_ERR
 
 	// assign previous scan settings
 	discard_RectRasterScanSet_type(&scanEngine->scanSettings);
-	nullChk( scanEngine->scanSettings = init_RectRasterScanSet_type(previousScanSettings->pixSize, previousScanSettings->height, previousScanSettings->heightOffset, previousScanSettings->width, previousScanSettings->widthOffset, previousScanSettings->pixelDwellTime) );
+	nullChk( scanEngine->scanSettings = init_RectRasterScanSet_type(previousScanSettings->name, previousScanSettings->pixSize, previousScanSettings->height, previousScanSettings->heightOffset, previousScanSettings->width, previousScanSettings->widthOffset, previousScanSettings->pixelDwellTime) );
 	discard_RectRasterScanSet_type(&scanEngine->parentFrameScanSettings);
-	nullChk( scanEngine->parentFrameScanSettings = init_RectRasterScanSet_type(previousScanSettings->pixSize, previousScanSettings->height, previousScanSettings->heightOffset, previousScanSettings->width, previousScanSettings->widthOffset, previousScanSettings->pixelDwellTime) );
+	nullChk( scanEngine->parentFrameScanSettings = init_RectRasterScanSet_type(previousScanSettings->name, previousScanSettings->pixSize, previousScanSettings->height, previousScanSettings->heightOffset, previousScanSettings->width, previousScanSettings->widthOffset, previousScanSettings->pixelDwellTime) );
 	
 	// update preferred widths and pixel dwell times
 	errChk( NonResRectRasterScan_ScanWidths(scanEngine, &errorInfo.errMsg) );

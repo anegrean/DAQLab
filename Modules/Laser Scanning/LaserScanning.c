@@ -856,6 +856,10 @@ static int CVICALLBACK 					NonResRectRasterScan_LaunchPixelBuilder 			(void* fu
 
 static int CVICALLBACK 					NonResRectRasterScan_MainPan_CB 					(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
+static int 								NonResRectRasterScan_UpdateWidthOffset 				(RectRaster_type* rectRaster, double* widthOffsetPtr, char** errMsg);
+
+static int 								NonResRectRasterScan_UpdateHeightOffset 			(RectRaster_type* rectRaster, double* heightOffsetPtr, char** errMsg);
+
 static int CVICALLBACK 					NonResRectRasterScan_FrameScanPan_CB 				(int panel, int control, int event, void *callbackData, int eventData1, int eventData2);
 
 	// given a subregion frame scan 1-based list index from scanEngine->scanROIs list, this function sets the UI and scan engine data structures to scan the desired subregion 
@@ -1350,9 +1354,11 @@ INIT_ERR
 	// update height
 	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_Height, rectRaster->scanSettings->height * rectRaster->scanSettings->pixSize);
 				
-	// update height and width offsets
-	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_HeightOffset, rectRaster->scanSettings->heightOffset * rectRaster->scanSettings->pixSize); 
+	// update height and width offsets together with their increments based on the chosen pixel size
+	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_HeightOffset, rectRaster->scanSettings->heightOffset * rectRaster->scanSettings->pixSize);
+	SetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_HeightOffset, ATTR_INCR_VALUE, rectRaster->scanSettings->pixSize); 
 	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_WidthOffset, rectRaster->scanSettings->widthOffset * rectRaster->scanSettings->pixSize);
+	SetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_WidthOffset, ATTR_INCR_VALUE, rectRaster->scanSettings->pixSize);
 				
 	// update pixel size & set boundaries
 	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelSize, rectRaster->scanSettings->pixSize);
@@ -3816,36 +3822,140 @@ PRINT_ERR
 
 static int CVICALLBACK ScanEnginesTab_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
-	LaserScanning_type*		ls = callbackData;
+INIT_ERR
+
+	LaserScanning_type*		ls 					= callbackData;
+	int 					activeTabIdx		= 0;
+	int						tabPagePanHndl		= 0;
+	int						nTabs				= 0;
+	void*  					tabPageDataPtr		= NULL;
+	ScanEngine_type**		enginePtr			= NULL;
 	
-	// continue only if Del button was pressed on the ScanEngines tab control
-	if (control != ScanPan_ScanEngines || event != EVENT_KEYPRESS || eventData1 != VAL_FWD_DELETE_VKEY) return 0;
-	
-	int 	activeTabIdx;
-	int		tabPagePanHndl;
-	int		nTabs;
-	void*   tabPageDataPtr;
 	
 	GetActiveTabPage(panel, control, &activeTabIdx);
 	GetPanelHandleFromTabPage(panel, control, activeTabIdx, &tabPagePanHndl);
 	GetPanelAttribute(tabPagePanHndl, ATTR_CALLBACK_DATA, &tabPageDataPtr);
-	// don't delete this tab page if it's the default "None" page that has no callback data
+	enginePtr = ListGetPtrToItem(ls->scanEngines, activeTabIdx + 1);
+	
+	// ignore the default "None" page that has no callback data
 	if (!tabPageDataPtr) return 0;
+							
+	switch (event) {
+			
+		case EVENT_KEYPRESS:
+			
+			switch (eventData1) {
+					
+				case VAL_FWD_DELETE_VKEY:
+					
+					switch (control) {
+							
+						case ScanPan_ScanEngines:
+							
+							// delete scan engine and tab page
+							DLUnregisterScanEngine(*enginePtr);
+							(*(*enginePtr)->discardFptr) ((void**)enginePtr);
+							ListRemoveItem(ls->scanEngines, 0, activeTabIdx + 1);
+							DeleteTabPage(panel, control, activeTabIdx, 1);
 	
-	// delete scan engine and tab page
-	ScanEngine_type**	enginePtr = ListGetPtrToItem(ls->scanEngines, activeTabIdx + 1);
-	DLUnregisterScanEngine(*enginePtr);
-	(*(*enginePtr)->discardFptr) ((void**)enginePtr);
-	ListRemoveItem(ls->scanEngines, 0, activeTabIdx + 1);
-	DeleteTabPage(panel, control, activeTabIdx, 1);
-	
-	// if there are no more scan engines, add default "None" tab page and dim "Settings" menu item
-	GetNumTabPages(panel, control, &nTabs);
-	if (!nTabs) {
-		SetMenuBarAttribute(ls->menuBarHndl, ls->engineSettingsMenuItemHndl, ATTR_DIMMED, 1); 
-		InsertTabPage(panel, control, -1, "None");
+							// if there are no more scan engines, add default "None" tab page and dim "Settings" menu item
+							GetNumTabPages(panel, control, &nTabs);
+							if (!nTabs) {
+								SetMenuBarAttribute(ls->menuBarHndl, ls->engineSettingsMenuItemHndl, ATTR_DIMMED, 1); 
+								InsertTabPage(panel, control, -1, "None");
+							}
+							break;
+					}
+					break;
+					
+				case VAL_RIGHT_ARROW_VKEY:
+					
+					switch((*enginePtr)->engineType) {
+							
+						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
+							
+							RectRaster_type*	rectRaster 			= (RectRaster_type*)*enginePtr;
+							double				offsetIncrement		= 0;
+							double				widthOffset			= 0;
+							
+							GetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_WidthOffset, ATTR_INCR_VALUE, &offsetIncrement);
+							widthOffset = rectRaster->scanSettings->widthOffset - offsetIncrement;
+							errChk( NonResRectRasterScan_UpdateWidthOffset(rectRaster, &widthOffset, &errorInfo.errMsg) );
+							SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_WidthOffset, widthOffset);
+							
+							break;
+					}
+					
+					break;
+					
+				case VAL_LEFT_ARROW_VKEY:
+					
+					switch((*enginePtr)->engineType) {
+							
+						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
+							
+							RectRaster_type*	rectRaster 			= (RectRaster_type*)*enginePtr;
+							double				offsetIncrement		= 0;
+							double				widthOffset			= 0;
+							
+							GetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_WidthOffset, ATTR_INCR_VALUE, &offsetIncrement);
+							widthOffset = rectRaster->scanSettings->widthOffset + offsetIncrement;
+							errChk( NonResRectRasterScan_UpdateWidthOffset(rectRaster, &widthOffset, &errorInfo.errMsg) );
+							SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_WidthOffset, widthOffset);
+							
+							break;
+					}
+					
+					break;
+					
+				case VAL_UP_ARROW_VKEY:
+					
+					switch((*enginePtr)->engineType) {
+							
+						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
+							
+							RectRaster_type*	rectRaster 			= (RectRaster_type*)*enginePtr;
+							double				offsetIncrement		= 0;
+							double				heightOffset		= 0;
+							
+							GetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_HeightOffset, ATTR_INCR_VALUE, &offsetIncrement);
+							heightOffset = rectRaster->scanSettings->heightOffset + offsetIncrement;
+							errChk( NonResRectRasterScan_UpdateHeightOffset(rectRaster, &heightOffset, &errorInfo.errMsg) );
+							SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_HeightOffset, heightOffset);
+							
+							break;
+					}
+					
+					break;
+					
+				case VAL_DOWN_ARROW_VKEY:
+					
+					switch((*enginePtr)->engineType) {
+							
+						case ScanEngine_RectRaster_NonResonantGalvoFastAxis_NonResonantGalvoSlowAxis:
+							
+							RectRaster_type*	rectRaster 			= (RectRaster_type*)*enginePtr;
+							double				offsetIncrement		= 0;
+							double				heightOffset		= 0;
+							
+							GetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_HeightOffset, ATTR_INCR_VALUE, &offsetIncrement);
+							heightOffset = rectRaster->scanSettings->heightOffset - offsetIncrement;
+							errChk( NonResRectRasterScan_UpdateHeightOffset(rectRaster, &heightOffset, &errorInfo.errMsg) );
+							SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_HeightOffset, heightOffset);
+							
+							break;
+					}
+					
+					break;
+			}
+			break;
 	}
 	
+	
+Error:
+	
+PRINT_ERR
+
 	return 0;
 }
 
@@ -5474,6 +5584,82 @@ static int CVICALLBACK NonResRectRasterScan_MainPan_CB (int panel, int control, 
 	return 0;
 }
 
+static int NonResRectRasterScan_UpdateWidthOffset (RectRaster_type* rectRaster, double* widthOffsetPtr, char** errorMsg)
+{
+#define		NonResRectRasterScan_UpdateWidthOffset_Err_OutOfFOV		-1
+INIT_ERR
+
+	char*					msg 				= NULL;
+	int	 					widthOffsetPix		= 0;	// in [pix]
+	NonResGalvoCal_type*	fastAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;     
+	NonResGalvoCal_type*	slowAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
+	
+	// adjust widthOffset to be a multiple of pixel size
+	widthOffsetPix		= (int) floor(*widthOffsetPtr/rectRaster->scanSettings->pixSize);
+	*widthOffsetPtr 	= widthOffsetPix * rectRaster->scanSettings->pixSize;
+	
+	if (!RectROIInsideRect(rectRaster->scanSettings->height * rectRaster->scanSettings->pixSize, rectRaster->scanSettings->width * rectRaster->scanSettings->pixSize, 
+		rectRaster->scanSettings->heightOffset * rectRaster->scanSettings->pixSize, *widthOffsetPtr, 2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement,
+		2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement)) {
+			
+		// return to previous value
+		*widthOffsetPtr = rectRaster->scanSettings->widthOffset * rectRaster->scanSettings->pixSize;
+		
+		char*	rectRasterName  = GetTaskControlName(rectRaster->baseClass.taskControl);
+		msg = DL_DynStringCat("Requested ROI exceeds maximum limit for laser scanning module ", rectRasterName, " .");
+		OKfree(rectRasterName);
+		SET_ERR(NonResRectRasterScan_UpdateWidthOffset_Err_OutOfFOV, msg);
+		
+	}
+			
+	// update width offset
+	rectRaster->scanSettings->widthOffset = widthOffsetPix;  // in [pix]
+	
+Error:
+	// cleanup
+	OKfree(msg);
+	
+RETURN_ERR
+
+}
+
+static int NonResRectRasterScan_UpdateHeightOffset (RectRaster_type* rectRaster, double* heightOffsetPtr, char** errorMsg)
+{
+#define		NonResRectRasterScan_UpdateHeightOffset_Err_OutOfFOV		-1
+INIT_ERR
+
+	char*					msg 				= NULL;
+	int						heightOffsetPix		= 0;				// in [pix]
+	NonResGalvoCal_type*	fastAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.fastAxisCal;     
+	NonResGalvoCal_type*	slowAxisCal			= (NonResGalvoCal_type*) rectRaster->baseClass.slowAxisCal;
+	
+	
+	// adjust heightOffset to be a multiple of pixel size
+	heightOffsetPix 	= (int) floor(*heightOffsetPtr/rectRaster->scanSettings->pixSize);
+	*heightOffsetPtr	= heightOffsetPix * rectRaster->scanSettings->pixSize;
+	
+	if (!RectROIInsideRect(rectRaster->scanSettings->height * rectRaster->scanSettings->pixSize, rectRaster->scanSettings->width * rectRaster->scanSettings->pixSize, 
+		*heightOffsetPtr, rectRaster->scanSettings->widthOffset * rectRaster->scanSettings->pixSize, 2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement,
+		2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement)) {
+			
+		// return to previous value
+		*heightOffsetPtr = rectRaster->scanSettings->heightOffset * rectRaster->scanSettings->pixSize;
+		
+		char*	rectRasterName  = GetTaskControlName(rectRaster->baseClass.taskControl);
+		msg = DL_DynStringCat("Requested ROI exceeds maximum limit for laser scanning module ", rectRasterName, " .");
+		OKfree(rectRasterName);
+		SET_ERR(NonResRectRasterScan_UpdateHeightOffset_Err_OutOfFOV, msg);
+	}
+		
+	// update height offset
+	rectRaster->scanSettings->heightOffset = heightOffsetPix;  // in [pix]
+	
+Error:
+	// cleanup
+	OKfree(msg);
+	
+RETURN_ERR
+}
 
 static int CVICALLBACK NonResRectRasterScan_FrameScanPan_CB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
@@ -5482,6 +5668,7 @@ INIT_ERR
 	RectRaster_type*		scanEngine		= callbackData;
 	NonResGalvoCal_type*	fastAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.fastAxisCal;     
 	NonResGalvoCal_type*	slowAxisCal		= (NonResGalvoCal_type*) scanEngine->baseClass.slowAxisCal;
+	char*					msg				= NULL;
 	
 	switch (event) {
 			
@@ -5620,56 +5807,22 @@ INIT_ERR
 					
 				case ScanTab_WidthOffset:
 					
-					double		widthOffset;					// in [um]
-					int			widthOffsetPix;					// in [pix]
-					GetCtrlVal(panel, control, &widthOffset);  	// in [um]
-					// adjust widthOffset to be a multiple of pixel size
-					widthOffsetPix		= (int) floor(widthOffset/scanEngine->scanSettings->pixSize);
-					widthOffset 		= widthOffsetPix * scanEngine->scanSettings->pixSize;
+					double		widthOffset		= 0;			// in [um]
 					
-					if (!RectROIInsideRect(scanEngine->scanSettings->height * scanEngine->scanSettings->pixSize, scanEngine->scanSettings->width * scanEngine->scanSettings->pixSize, 
-										   scanEngine->scanSettings->heightOffset * scanEngine->scanSettings->pixSize, widthOffset, 2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement,
-										  2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement)) {
-							// return to previous value
-							SetCtrlVal(panel, control, scanEngine->scanSettings->widthOffset * scanEngine->scanSettings->pixSize);
-							DLMsg("Requested ROI exceeds maximum limit for laser scanning module ", 1);
-							char*	scanEngineName = GetTaskControlName(scanEngine->baseClass.taskControl);
-							DLMsg(scanEngineName, 0);
-							OKfree(scanEngineName);
-							DLMsg(".\n\n", 0);
-							return 0; // stop here
-					}
-							
-					// update width offset
-					scanEngine->scanSettings->widthOffset = widthOffsetPix;  // in [pix]
+					GetCtrlVal(panel, control, &widthOffset);  	// in [um]
+					errorInfo.error = NonResRectRasterScan_UpdateWidthOffset(scanEngine, &widthOffset, &errorInfo.errMsg);
 					SetCtrlVal(panel, control, widthOffset);
+					if (errorInfo.error < 0) goto Error;
 					break;
 					
 				case ScanTab_HeightOffset:
 					
-					double		heightOffset;					// in [um]
-					int			heightOffsetPix;				// in [pix]
-					GetCtrlVal(panel, control, &heightOffset);
-					// adjust heightOffset to be a multiple of pixel size
-					heightOffsetPix 	= (int) floor(heightOffset/scanEngine->scanSettings->pixSize);
-					heightOffset 		= heightOffsetPix * scanEngine->scanSettings->pixSize;
+					double		heightOffset	= 0;			// in [um]
 					
-					if (!RectROIInsideRect(scanEngine->scanSettings->height * scanEngine->scanSettings->pixSize, scanEngine->scanSettings->width * scanEngine->scanSettings->pixSize, 
-						heightOffset, scanEngine->scanSettings->widthOffset * scanEngine->scanSettings->pixSize, 2 * slowAxisCal->commandVMax * slowAxisCal->sampleDisplacement,
-						2 * fastAxisCal->commandVMax * fastAxisCal->sampleDisplacement)) {
-							// return to previous value
-							SetCtrlVal(panel, control, scanEngine->scanSettings->heightOffset * scanEngine->scanSettings->pixSize);
-							DLMsg("Requested ROI exceeds maximum limit for laser scanning module ", 1);
-							char*	scanEngineName = GetTaskControlName(scanEngine->baseClass.taskControl);
-							DLMsg(scanEngineName, 0);
-							OKfree(scanEngineName);
-							DLMsg(".\n\n", 0);
-							return 0; // stop here
-						}
-						
-					// update height offset
-					scanEngine->scanSettings->heightOffset = heightOffsetPix;  // in [pix]
-					SetCtrlVal(panel, control, heightOffset); 
+					GetCtrlVal(panel, control, &heightOffset);
+					errorInfo.error = NonResRectRasterScan_UpdateHeightOffset(scanEngine, &heightOffset, &errorInfo.errMsg);
+					SetCtrlVal(panel, control, heightOffset);
+					if (errorInfo.error < 0) goto Error;
 					break;
 					
 				case ScanTab_PixelDwell:
@@ -5732,10 +5885,12 @@ INIT_ERR
 					scanEngine->scanSettings->pixSize = newPixelSize;
 					// adjust height control to be multiple of new pixel size
 					SetCtrlVal(panel, ScanTab_Height, scanEngine->scanSettings->height * scanEngine->scanSettings->pixSize);
-					// adjust height offset control to be multiple of new pixel size
+					// adjust height offset control to be multiple of new pixel size and adjust its increment
 					SetCtrlVal(panel, ScanTab_HeightOffset, scanEngine->scanSettings->heightOffset * scanEngine->scanSettings->pixSize);
-					// adjust width offset control to be multiple of new pixel size
+					SetCtrlAttribute(panel, ScanTab_HeightOffset, ATTR_INCR_VALUE, scanEngine->scanSettings->pixSize);
+					// adjust width offset control to be multiple of new pixel size and adjust its increment
 					SetCtrlVal(panel, ScanTab_WidthOffset, scanEngine->scanSettings->widthOffset * scanEngine->scanSettings->pixSize);
+					SetCtrlAttribute(panel, ScanTab_WidthOffset, ATTR_INCR_VALUE, scanEngine->scanSettings->pixSize);
 					// update preferred widths
 					errChk( NonResRectRasterScan_ScanWidths(scanEngine, &errorInfo.errMsg) );
 					// update preferred pixel dwell times
@@ -5864,9 +6019,11 @@ INIT_ERR
 	char widthString[NonResGalvoRasterScan_Max_ComboboxEntryLength+1];
 	Fmt(widthString, "%s<%f[p1]", rectRaster->scanSettings->width * rectRaster->scanSettings->pixSize);
 	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_Width, widthString); 
-	// update height and width offsets
+	// update height and width offsets and their increments
 	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_HeightOffset, rectRaster->scanSettings->heightOffset * rectRaster->scanSettings->pixSize); 
+	SetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_HeightOffset, ATTR_INCR_VALUE, rectRaster->scanSettings->pixSize);
 	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_WidthOffset, rectRaster->scanSettings->widthOffset * rectRaster->scanSettings->pixSize);
+	SetCtrlAttribute(rectRaster->baseClass.frameScanPanHndl, ScanTab_WidthOffset, ATTR_INCR_VALUE, rectRaster->scanSettings->pixSize);
 	// update pixel size
 	SetCtrlVal(rectRaster->baseClass.frameScanPanHndl, ScanTab_PixelSize, rectRaster->scanSettings->pixSize);
 	// update pixel dwell times
@@ -6909,16 +7066,16 @@ INIT_ERR
 		shutterScanSignal[i] = TRUE;
 	
 	// calculate number of pixels needed to switch the shutter
-	uInt32	nShutterPix = (uInt32) ceil(scanEngine->baseClass.shutterSwitchTime/scanEngine->scanSettings->pixelDwellTime);
+	uInt32	nShutterPix = (uInt32) floor(scanEngine->baseClass.shutterSwitchTime/scanEngine->scanSettings->pixelDwellTime);
 	
 	// mark closed shutter times if the shutter switch time pixels are fewer than the line dead time pixels
 	if (nShutterPix < nDeadTimePixels) {
 		for (size_t i = 0; i < nDeadTimePixels - nShutterPix; i++)
-			shutterScanSignal[i] = FALSE;
+			shutterScanSignal[i] = 0;
 		for (size_t i = nGalvoSamplesPerLine - nDeadTimePixels; i < nGalvoSamplesPerLine + nDeadTimePixels - nShutterPix - 1; i++)
-			shutterScanSignal[i] = FALSE;
+			shutterScanSignal[i] = 0;
 		for (size_t i = nShutterCycleSamples - nDeadTimePixels; i < nShutterCycleSamples; i++)
-			shutterScanSignal[i] = FALSE;
+			shutterScanSignal[i] = 0;
 	}
 	
 	// generate shutter raster scan waveform 
@@ -9093,8 +9250,9 @@ static void SetRectRasterScanEngineModeVChans (RectRaster_type* scanEngine)
 			// inactivate ROI hold VChan
 			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIHold, FALSE);
 			
-			// activate ROI shutter VChan
-			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, TRUE);
+			// inactivate ROI shutter VChan
+			// note: this is inactive for now because the timing signal is not correctly aligned with the galvo signal
+			SetVChanActive((VChan_type*)scanEngine->baseClass.VChanROIShutter, FALSE);
 			
 			break;
 							
@@ -9419,7 +9577,9 @@ INIT_ERR
 	// update remaining controls on the scan panel
 	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_Height, scanEngine->scanSettings->height * scanEngine->scanSettings->pixSize);
 	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_HeightOffset, scanEngine->scanSettings->heightOffset * scanEngine->scanSettings->pixSize);
+	SetCtrlAttribute(scanEngine->baseClass.frameScanPanHndl, ScanTab_HeightOffset, ATTR_INCR_VALUE, scanEngine->scanSettings->pixSize); 
 	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_WidthOffset, scanEngine->scanSettings->widthOffset * scanEngine->scanSettings->pixSize);
+	SetCtrlAttribute(scanEngine->baseClass.frameScanPanHndl, ScanTab_WidthOffset, ATTR_INCR_VALUE, scanEngine->scanSettings->pixSize); 
 	SetCtrlVal(scanEngine->baseClass.frameScanPanHndl, ScanTab_PixelSize, scanEngine->scanSettings->pixSize);
 	
 	// update jump start delay and minimum jump period

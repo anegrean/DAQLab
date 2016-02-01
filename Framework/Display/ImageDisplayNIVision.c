@@ -64,6 +64,7 @@ struct ImageDisplayNIVision {
 	Image*								NIImage;				// NI Image displayed in the window. Depending on various transformations that can be applied to the original image, this image may be different from the original image kept in the base class.
 	int									imaqWndID;				// Assigned IMAQ window ID for display.
 	HWND								imaqWndWindowsHndl;		// Windows window handle assigned to display the IMAQ image.
+	HWND								imaqToolWindowsHndl;	// IMAQ tool windows window handle.
 	
 	LONG_PTR							imaqWndProc;			// Pointer to the original imaq window procedure. This will be called by windows after the custom window procedure.
 	
@@ -206,10 +207,12 @@ INIT_ERR
 		
 	}
 	
-	// set window on top
+	// set image display window on top
 	nullChk( SetWindowPos(imgDisplay->imaqWndWindowsHndl, HWND_TOPMOST, 0, 0, 0, 0, (SWP_ASYNCWINDOWPOS | SWP_DRAWFRAME | SWP_NOMOVE | SWP_NOSIZE)) );
+	// set tool window on top
+	nullChk( SetWindowPos(imgDisplay->imaqToolWindowsHndl, HWND_TOPMOST, 0, 0, 0, 0, (SWP_ASYNCWINDOWPOS | SWP_DRAWFRAME | SWP_NOMOVE | SWP_NOSIZE)) );
 	
-	
+
 Error:
 	
 	return errorInfo.error;
@@ -262,7 +265,8 @@ INIT_ERR
 	
 	niImgDisp->NIImage					= NULL;
 	niImgDisp->imaqWndID				= -1;
-	niImgDisp->imaqWndWindowsHndl		= 0;	
+	niImgDisp->imaqWndWindowsHndl		= 0;
+	niImgDisp->imaqToolWindowsHndl		= 0;
 	niImgDisp->imaqWndProc				= 0;
 	
 	// Base class
@@ -292,6 +296,9 @@ INIT_ERR
 	// get windows IMAQ window handle
 	nullChk( niImgDisp->imaqWndWindowsHndl = (HWND) imaqGetSystemWindowHandle(niImgDisp->imaqWndID) ); 
 	
+	// get windows IMAQ tool window handle
+	nullChk( niImgDisp->imaqToolWindowsHndl = (HWND) imaqGetToolWindowHandle() );
+	
 	// get windows parent panel handle
 	if (parentPanHndl)
 		GetPanelAttribute(parentPanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &parentPanWindowsHndl);
@@ -299,8 +306,7 @@ INIT_ERR
 	// embed display and toolbox in parent window
 	if (parentPanWindowsHndl) {
 		SetParent(niImgDisp->imaqWndWindowsHndl, (HWND) parentPanWindowsHndl);
-		HWND imaqToolWindowsHndl = imaqGetToolWindowHandle();
-		SetParent(imaqToolWindowsHndl, (HWND) parentPanWindowsHndl);
+		SetParent(niImgDisp->imaqToolWindowsHndl, (HWND) parentPanWindowsHndl);
 	}
 	
 	// init IMAQ image buffer 
@@ -386,7 +392,7 @@ INIT_ERR
 	// add custom window callback function
 	SetWindowSubclass(niImgDisp->imaqWndWindowsHndl, CustomImageDisplayNIVision_CB, 0, (DWORD_PTR)niImgDisp);
 	
-	// adjust display window
+	// adjust image display and tool windows
 	AdjustNIVisionImageDisplay(niImgDisp);
 	
 	return niImgDisp;

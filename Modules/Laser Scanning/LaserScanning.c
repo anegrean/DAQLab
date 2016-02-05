@@ -8054,19 +8054,7 @@ INIT_ERR
 						
 				#endif
 				
-				
-				
-				//--------------------------------------
-				// Display image for this channel
-				//--------------------------------------
-				
-				errChk( (*(*imgDisplayPtr)->displayImageFptr) (*imgDisplayPtr, &imgBuffer->image, &errorInfo.errMsg) );
-				
-				errChk( CmtReleaseTSVPtr(imgBuffer->scanChan->imgDisplayTSV) );
-				imgBuffer->scanChan->imgDisplayTSVLineNumDebug = 0;
-				imgDisplayPtr = NULL;
-				
-				
+						
 				//--------------------------------------
 				// Send image for this channel if needed
 				//--------------------------------------
@@ -8079,6 +8067,17 @@ INIT_ERR
 					nullChk( imagePacket = init_DataPacket_type(DL_Image, (void**)&sendImage, &dsInfo,(DiscardFptr_type)discard_Image_type));
 					errChk( SendDataPacket(imgBuffer->scanChan->outputVChan, &imagePacket, 0, &errorInfo.errMsg) );
 				}
+				
+				//--------------------------------------
+				// Display image for this channel
+				//--------------------------------------
+				
+				errChk( (*(*imgDisplayPtr)->displayImageFptr) (*imgDisplayPtr, &imgBuffer->image, &errorInfo.errMsg) );
+				
+				errChk( CmtReleaseTSVPtr(imgBuffer->scanChan->imgDisplayTSV) );
+				imgBuffer->scanChan->imgDisplayTSVLineNumDebug = 0;
+				imgDisplayPtr = NULL;
+				
 				
 				//---------------------------------------------------
 				// Assemble composite image if all channels are ready

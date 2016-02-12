@@ -8707,7 +8707,9 @@ SkipPoints:
 
 static double NonResRectRasterScan_RoundToGalvoSampling (RectRaster_type* scanEngine, double time)
 {
-	return ceil(time * 1e-3 * scanEngine->galvoSamplingRate) * 1e3/scanEngine->galvoSamplingRate;
+	double samplingTime = 1000/scanEngine->galvoSamplingRate; // sampling time in [ms]
+	
+	return ceil(time/samplingTime) * samplingTime;
 }
 
 static PointScanProtocol_type* init_PointScanProtocol_type (char protocolName[], double holdTime, uInt32 nHoldBurst, double holdBurstPeriod, double holdBurstPeriodIncr, double stimDelay,

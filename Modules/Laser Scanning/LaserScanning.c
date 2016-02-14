@@ -5331,14 +5331,14 @@ INIT_ERR
 		*pointScanProtocolPtr						= NULL;
 		
 		// round point scan protocol settings to galvo sampling time
-		rectRaster->pointScan.pointScanProtocol->holdTime 				= ceil(rectRaster->pointScan.pointScanProtocol->holdTime * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;  
-		rectRaster->pointScan.pointScanProtocol->holdBurstPeriod 		= ceil(rectRaster->pointScan.pointScanProtocol->holdBurstPeriod * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;  
-		rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr 	= ceil(rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
-		rectRaster->pointScan.pointScanProtocol->stimDelay 				= ceil(rectRaster->pointScan.pointScanProtocol->stimDelay * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
-		rectRaster->pointScan.pointScanProtocol->stimPulseONDuration 	= ceil(rectRaster->pointScan.pointScanProtocol->stimPulseONDuration * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
-		rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration 	= ceil(rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
-		rectRaster->pointScan.pointScanProtocol->startDelayInitVal 		= ceil(rectRaster->pointScan.pointScanProtocol->startDelayInitVal * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
-		rectRaster->pointScan.pointScanProtocol->startDelayIncrement	= ceil(rectRaster->pointScan.pointScanProtocol->startDelayIncrement * 1e-3 * rectRaster->galvoSamplingRate) * 1e3/rectRaster->galvoSamplingRate;
+		rectRaster->pointScan.pointScanProtocol->holdTime 				= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->holdTime);
+		rectRaster->pointScan.pointScanProtocol->holdBurstPeriod 		= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->holdBurstPeriod);
+		rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr 	= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr);
+		rectRaster->pointScan.pointScanProtocol->stimDelay 				= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->stimDelay);
+		rectRaster->pointScan.pointScanProtocol->stimPulseONDuration 	= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->stimPulseONDuration);
+		rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration 	= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration);
+		rectRaster->pointScan.pointScanProtocol->startDelayInitVal 		= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->startDelayInitVal);
+		rectRaster->pointScan.pointScanProtocol->startDelayIncrement	= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->startDelayIncrement);
 	
 	} else
 		rectRaster->pointScan.pointScanProtocol		= NULL;

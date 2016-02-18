@@ -782,24 +782,42 @@ INIT_ERR
 	char 				szStrings[255]			= "";
 	BOOL				HasLimitSwitchesFlag	= FALSE;
 	BOOL				ReadyFlag				= FALSE;
+	double				currMaxLimit			= 0;		// current stage maximum limit
+	double				currMinLimit			= 0;		// current stage minimum limit
+	
+	// querry current minimum and maximum stage limits
+	if (!PI_qSPA(PIStage->PIStageID, PIStage->assignedAxis, limitsParamID, &currMaxLimit, szStrings, 254)) {
+		PIerror = PI_GetError(PIStage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error reading maximum stage position limit. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		SET_ERR(SetHWStageLimits_Err_PICommand, msg);
+	}
+	
+	if (!PI_qSPA(PIStage->PIStageID, PIStage->assignedAxis, &limitsParamID[1], &currMinLimit, szStrings, 254)) {
+		PIerror = PI_GetError(PIStage->PIStageID);
+		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+		Fmt(msg, "Error reading maximum stage position limit. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+		SET_ERR(SetHWStageLimits_Err_PICommand, msg);
+	}
 	
 	// set maximum stage position limit
-	if (!PI_SPA(PIStage->PIStageID, PIStage->assignedAxis, limitsParamID, &maximumLimit, szStrings)){
-		PIerror = PI_GetError(PIStage->PIStageID);
-		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
-		Fmt(msg, "Error setting maximum stage position limit. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-		SET_ERR(SetHWStageLimits_Err_PICommand, msg);
-	}
+	if (maximumLimit != currMaxLimit) 
+		if (!PI_SPA(PIStage->PIStageID, PIStage->assignedAxis, limitsParamID, &maximumLimit, szStrings)){
+			PIerror = PI_GetError(PIStage->PIStageID);
+			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+			Fmt(msg, "Error setting maximum stage position limit. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+			SET_ERR(SetHWStageLimits_Err_PICommand, msg);
+		}
 	
 	// set minimum stage position limit
-	if (!PI_SPA(PIStage->PIStageID, PIStage->assignedAxis, &limitsParamID[1], &minimumLimit, szStrings)){
-		PIerror = PI_GetError(PIStage->PIStageID);
-		if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
-		Fmt(msg, "Error setting minimum stage position limit. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-		SET_ERR(SetHWStageLimits_Err_PICommand, msg);
-	}
+	if (minimumLimit != currMinLimit) 
+		if (!PI_SPA(PIStage->PIStageID, PIStage->assignedAxis, &limitsParamID[1], &minimumLimit, szStrings)){
+			PIerror = PI_GetError(PIStage->PIStageID);
+			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+			Fmt(msg, "Error setting minimum stage position limit. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+			SET_ERR(SetHWStageLimits_Err_PICommand, msg);
+		}
 	
-	// reference axis again
 	// check if there are limit switches
 	if (!PI_qLIM(PIStage->PIStageID, PIStage->assignedAxis, &HasLimitSwitchesFlag)) {
 		PIerror = PI_GetError(PIStage->PIStageID);
@@ -808,29 +826,31 @@ INIT_ERR
 		SET_ERR(SetHWStageLimits_Err_PICommand, msg);
 	}
 		 
-	// reference axis
-	if (HasLimitSwitchesFlag) {
-		if (!PI_FPL(PIStage->PIStageID, PIStage->assignedAxis)) {
-			PIerror = PI_GetError(PIStage->PIStageID);
-			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
-			Fmt(msg, "Referencing stage failed. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-			SET_ERR(SetHWStageLimits_Err_PICommand, msg);
-		}
-	} else
-		SET_ERR(SetHWStageLimits_Err_NoReferenceLimits, "Stage does not have limit switches and cannot be referenced.");
+	// reference axis again
+	if (minimumLimit != currMinLimit || maximumLimit != currMaxLimit) { 
+		if (HasLimitSwitchesFlag) {
+			if (!PI_FPL(PIStage->PIStageID, PIStage->assignedAxis)) {
+				PIerror = PI_GetError(PIStage->PIStageID);
+				if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+				Fmt(msg, "Referencing stage failed. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+				SET_ERR(SetHWStageLimits_Err_PICommand, msg);
+			}
+		} else
+			SET_ERR(SetHWStageLimits_Err_NoReferenceLimits, "Stage does not have limit switches and cannot be referenced.");
 	 
-	// wait until stage motion completes
-	do {
-		Sleep(500);
-		if (!PI_qONT(PIStage->PIStageID, PIStage->assignedAxis, &ReadyFlag)) {
-			PIerror = PI_GetError(PIStage->PIStageID);
-			if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
-			Fmt(msg, "Could not query if target reached. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
-			SET_ERR(SetHWStageLimits_Err_PICommand, msg);
-		}
-	} while (!ReadyFlag);
+		// wait until stage motion completes
+		do {
+			Sleep(500);
+			if (!PI_qONT(PIStage->PIStageID, PIStage->assignedAxis, &ReadyFlag)) {
+				PIerror = PI_GetError(PIStage->PIStageID);
+				if (!PI_TranslateError(PIerror, buff, 10000)) buff[0]=0; 
+				Fmt(msg, "Could not query if target reached. PI stage DLL Error ID %d: %s.\n\n", PIerror, buff);
+				SET_ERR(SetHWStageLimits_Err_PICommand, msg);
+			}
+		} while (!ReadyFlag);
 		
-	Sleep(PIStage_SETTLING_TIMEOUT * 1000);	// make sure stage settles before reading position
+		Sleep(PIStage_SETTLING_TIMEOUT * 1000);	// make sure stage settles before reading position
+	}
 	
 Error:
 	

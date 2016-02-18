@@ -19,12 +19,12 @@
 
 #define  DisplayPan                       2
 #define  DisplayPan_NUMERICSLIDE          2       /* control type: scale, callback function: (none) */
-#define  DisplayPan_PICTUREBUTTON         3       /* control type: pictButton, callback function: (none) */
-#define  DisplayPan_PICTUREBUTTON_2       4       /* control type: pictButton, callback function: (none) */
-#define  DisplayPan_PICTUREBUTTON_3       5       /* control type: pictButton, callback function: (none) */
-#define  DisplayPan_PICTUREBUTTON_4       6       /* control type: pictButton, callback function: (none) */
-#define  DisplayPan_PICTUREBUTTON_5       7       /* control type: pictButton, callback function: (none) */
-#define  DisplayPan_PICTUREBUTTON_6       8       /* control type: pictButton, callback function: (none) */
+#define  DisplayPan_Zoom                  3       /* control type: pictButton, callback function: (none) */
+#define  DisplayPan_RectROI               4       /* control type: pictButton, callback function: (none) */
+#define  DisplayPan_PointROI              5       /* control type: pictButton, callback function: (none) */
+#define  DisplayPan_Select                6       /* control type: pictButton, callback function: (none) */
+#define  DisplayPan_PICTUREBUTTON_6       7       /* control type: pictButton, callback function: (none) */
+#define  DisplayPan_PICTUREBUTTON_5       8       /* control type: pictButton, callback function: (none) */
 
 
      /* Control Arrays: */

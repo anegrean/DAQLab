@@ -8328,8 +8328,8 @@ static void NonResRectRasterScan_PointROIVoltage (RectRaster_type* rectRaster, P
 	// point X coordinate is along the fast scan axis, while the Y coordinate is along the slow scan axis
 	// X = 0, Y = 0 corresponds to the upper left corner of the image to which this point ROI belongs to
 	
-	*fastAxisCommandV = (nDeadTimePixels + point->x - (double)(rectRaster->scanSettings->width + 2 * nDeadTimePixels)/2.0 ) * rectRaster->scanSettings->pixSize / fastAxisCal->sampleDisplacement;
-	*slowAxisCommandV = (point->y - (double)rectRaster->scanSettings->height/2.0) * rectRaster->scanSettings->pixSize / slowAxisCal->sampleDisplacement;	
+	*fastAxisCommandV = (point->x - rectRaster->scanSettings->width/2.0 + rectRaster->scanSettings->widthOffset) * rectRaster->scanSettings->pixSize / fastAxisCal->sampleDisplacement;
+	*slowAxisCommandV = (point->y - rectRaster->scanSettings->height/2.0 + + rectRaster->scanSettings->heightOffset) * rectRaster->scanSettings->pixSize / slowAxisCal->sampleDisplacement;	
 	
 }
 

@@ -127,7 +127,7 @@ void OKfreeList (ListType* listPtr, DiscardFptr_type discardFptr)
 	*listPtr = 0;
 }
 
-void okfree	(void** objPtr)
+void OKFree	(void** objPtr)
 {
 	if (!*objPtr) return;
 	

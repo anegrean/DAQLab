@@ -669,7 +669,7 @@ delete_element(WScript_t *cur_script, int index)
 	
 	if (element->MAGIC_NUM == XYMOVE) 
 		/* Free saved Positions */
-		OKfreeList(&((XYMoveElement_t *)element)->saved_positions, okfree);	
+		OKfreeList(&((XYMoveElement_t *)element)->saved_positions, OKFree);	
 	}
 	
 	OKfree(element);

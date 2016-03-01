@@ -103,8 +103,8 @@ struct ImageDisplayCVI {
 	int						displayPanHndl;
 	int						canvasPanHndl;
 	int						menuBarHndl;
-	int						FilemenuID;
-	int						ImagemenuID;
+	int						fileMenuID;
+	int						imageMenuID;
 	
 	//---------------------------------------------------------------------------------------------------------------
 	// CALLBACK
@@ -117,7 +117,7 @@ struct ImageDisplayCVI {
 //==============================================================================
 // Static global variables
 
-static int buttonArray[] = {DisplayPan_Zoom, DisplayPan_RectROI, DisplayPan_PointROI, DisplayPan_Select, DisplayPan_PICTUREBUTTON_5, DisplayPan_PICTUREBUTTON_6};
+static int buttonArray[] = {DisplayPan_Zoom, DisplayPan_RectROI, DisplayPan_PointROI, DisplayPan_Select, DisplayPan_Bttn1, DisplayPan_Bttn2};
 
 
 //==============================================================================
@@ -254,16 +254,16 @@ INIT_ERR
     SetCtrlAttribute (imgDisplay->canvasPanHndl, CanvasPan_SELECTION, ATTR_ZPLANE_POSITION, 1);
 	
 	// set canvas pen color  & text background color
-	
 	SetCtrlAttribute (imgDisplay->canvasPanHndl, CanvasPan_Canvas, ATTR_PEN_COLOR, VAL_GREEN); 
 	SetCtrlAttribute (imgDisplay->canvasPanHndl, CanvasPan_Canvas, ATTR_PEN_FILL_COLOR, VAL_TRANSPARENT);
-	//add menu items
-	imgDisplay->menuBarHndl = NewMenuBar(imgDisplay->displayPanHndl);
-	imgDisplay->FilemenuID = NewMenu (imgDisplay->menuBarHndl, "File", -1);
-	NewMenuItem (imgDisplay->menuBarHndl, imgDisplay->FilemenuID, "Save", -1, VAL_F2_VKEY, MenuSaveCB, imgDisplay);
 	
-	imgDisplay->ImagemenuID = NewMenu(imgDisplay->menuBarHndl, "Image", -1);
-	NewMenuItem(imgDisplay->menuBarHndl, imgDisplay->ImagemenuID, "Restore", -1, VAL_F1_VKEY, MenuRestoreCB, imgDisplay);
+	// add menu items
+	imgDisplay->menuBarHndl = NewMenuBar(imgDisplay->displayPanHndl);
+	imgDisplay->fileMenuID = NewMenu (imgDisplay->menuBarHndl, "File", -1);
+	NewMenuItem(imgDisplay->menuBarHndl, imgDisplay->fileMenuID, "Save", -1, VAL_F2_VKEY, MenuSaveCB, imgDisplay);
+	
+	imgDisplay->imageMenuID = NewMenu(imgDisplay->menuBarHndl, "Image", -1);
+	NewMenuItem(imgDisplay->menuBarHndl, imgDisplay->imageMenuID, "Restore", -1, VAL_F1_VKEY, MenuRestoreCB, imgDisplay);
 	
 	
 	// create image list
@@ -275,7 +275,7 @@ INIT_ERR
 		nullChk( imgDisplay->resizedArray   		= malloc(imgWidth * imgHeight * sizeof(int)) );
 		nullChk( imgDisplay->interpolationArray   	= malloc(imgWidth * imgHeight * sizeof(int)) ); 
 		
-		//allocate RGB overlay buffers
+		// allocate RGB overlay buffers
 		for(int i = 0; i < 3; i++) {
 			nullChk( imgDisplay->RGBOverlayBuffer[i] = malloc(imgWidth * imgHeight * sizeof(float)) );
 		}
@@ -329,32 +329,6 @@ static void discard_ImageDisplayCVI_type (ImageDisplayCVI_type** imageDisplayPtr
 	
 }
 
-
-void discard_ImageCVI_type (ImageDisplayCVI_type** ImageCVIPtr)
-{
-	ImageDisplayCVI_type* ImageCVI = *ImageCVIPtr;
-	if (!ImageCVI) return;				   
-	
-
-	
-	OKfreePanHndl(ImageCVI->displayPanHndl);
-	OKfreePanHndl(ImageCVI->canvasPanHndl);
-	
-	OKfree(ImageCVI);
-}
-
-void ClearImageCVIList (ListType imageList)
-{
-	size_t				nImages 	= ListNumItems(imageList);
-	Image_type**		imagePtr 	= NULL;
-	
-	for (size_t i = 1; i <= nImages; i++) {
-		imagePtr = (Image_type**)ListGetPtrToItem(imageList, i);
-		discard_Image_type(imagePtr);
-	}
-	ListClear(imageList);
-}
-
 static void ConvertToBitArray(ImageDisplayCVI_type* display, Image_type* image) 
 {
 INIT_ERR
@@ -362,7 +336,6 @@ INIT_ERR
 	int 				iterations 			= 0;
 	int					imgHeight			= 0;
 	int					imgWidth			= 0;
-	unsigned char*  	pixArray			= NULL;
 	ImageTypes 			imgType				= GetImageType(image);
 	int 				nPixels				= 0;
 	uInt64				bitChunkIdx			= 0;
@@ -372,8 +345,6 @@ INIT_ERR
 	
 	nPixels	= imgHeight * imgWidth;
 			
-	nullChk(pixArray = (unsigned char*) malloc(nPixels * sizeof(unsigned char)));
-
 	switch (imgType) {
 		
 		// 8 bit  
@@ -759,7 +730,7 @@ static int CVICALLBACK DisplayPanCtrlCallback (int panel, int control, int event
 				 
 					break;
 					
-				case DisplayPan_PICTUREBUTTON_5:  
+				case DisplayPan_Bttn1:  
 			
 					GetCtrlVal (display->displayPanHndl, control, &state);
 				
@@ -1127,12 +1098,10 @@ INIT_ERR
 	BilinearResize(display->interpolationArray, &display->resizedArray, imageWidth, imageHeight, newWidth, newHeight);
 	
 	// update image array size and allocate memory
-	display->nBytes = newWidth * newHeight * 4;
-	
-	// update display info																												
 	display->imgWidth 	= newWidth;
 	display->imgHeight 	= newHeight;
-
+	display->nBytes 	= newWidth * newHeight * 4;
+	
 	nullChk( display->bitmapBitArray = (unsigned char*) malloc(display->nBytes * sizeof(unsigned char)) );  
 	
 	Deserialize(display, display->resizedArray, newWidth * newHeight);
@@ -1162,24 +1131,6 @@ Error:
 	return errorInfo.error; 
 	
 	
-}
-
-void NormalizePixelArray(ImageDisplayCVI_type* display, int **arrayPtr) {
-	
-	int 	imgHeight   = 0;
-	int 	imgWidth	= 0;
-	int* 	array		= *arrayPtr;
-	
-	GetImageSize(display->baseClass.image, &imgHeight, &imgWidth);
-	
-	int 	nPixels 	= imgHeight * imgWidth; 
-
-	// create integer pixel array from byte array
-	for(int i = 0; i < nPixels; i++) {
-		array[i] = ( display->bitmapBitArray[4 * i] << 24) | ( display->bitmapBitArray[4 * i + 1] << 16) |
-				 	( display->bitmapBitArray[4 * i + 2] << 8) | display->bitmapBitArray[4 * i + 3] ;
-	
-	}
 }
 
 static void Deserialize(ImageDisplayCVI_type* display, int* array, int length) {
@@ -1406,7 +1357,7 @@ void CVICALLBACK MenuSaveCB (int menuBarHandle, int menuItemID, void *callbackDa
 		//save bitmap
 		GetCtrlDisplayBitmap (display->canvasPanHndl, CanvasPan_Canvas, 0, &bitmapID);
 		SaveBitmapToJPEGFile (bitmapID, PathName, JPEG_DCTFLOAT, 100); //CHANGE2TIFF
-};
+}
 
 //Callback triggered when "Restore" button is clicked  
 void CVICALLBACK MenuRestoreCB (int menuBarHandle, int menuItemID, void *callbackData, int panelHandle) {

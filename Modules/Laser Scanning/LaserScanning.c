@@ -28,7 +28,7 @@
 // Choose only one of the include files below
 //----------------------------------------------------------------------------
 #include "ImageDisplayNIVision.h"
-//#include "ImageDisplayCVI.h"
+//#include "ImageDisplayCVI2.h"
 //----------------------------------------------------------------------------
 
 									 
@@ -535,7 +535,6 @@ typedef struct {
 	uInt32						nHoldBurst;					// Number of hold events within a single sweep that share a common start timepoint, i.e. the control waveform is continuous. Default is 1.
 	double						holdBurstPeriod;			// Elapsed time between hold events when holdBurstPeriodIncr is set to 0, otherwise it is the elapsed time between the first and second hold event.
 															// The holdBurstPeriod cannot be shorter than the time needed to return the galvos at the end of each hold period to the parked position and then positioning them back again at the hold location.
-	double						holdBurstPeriodIncr;		// Ammount of time to increment the holdBurstPeriod with each hold event. If this value is not zero, subsequent hold event occur at longer times from each other.
 	double						stimDelay;					// Delay in [ms] measured from the moment the galvos are stationary at the point ROI to the moment a stimulation is initiated. 
 															// This delay together with the stimulation duration is less than or equal to the holding time.
 	double						stimPulseONDuration;		// Time in [ms] during which a stimulation pulse is delivered at the given ROI.
@@ -895,7 +894,7 @@ static double 							NonResRectRasterScan_RoundToGalvoSampling 			(RectRaster_ty
 	// Point jump mode
 	//--------------------------------------
 
-static PointScanProtocol_type* 			init_PointScanProtocol_type 						(char protocolName[], double holdTime, uInt32 nHoldBurst, double holdBurstPeriod, double holdBurstPeriodIncr, double stimDelay,
+static PointScanProtocol_type* 			init_PointScanProtocol_type 						(char protocolName[], double holdTime, uInt32 nHoldBurst, double holdBurstPeriod, double stimDelay,
 														    								 double stimPulseONDuration, double stimPulseOFFDuration, uInt32 nStimPulses, PointJumpMethods jumpMethod, 
 																							 BOOL record, BOOL stimulate, uInt32 nIntegration, uInt32 nSequenceRepeat, double startDelayInitVal,
 																							 double startDelayIncrement, double repeatWait);
@@ -1838,7 +1837,6 @@ INIT_ERR
 	DAQLabXMLNode					pointSettingsAttr[] 			= { {"NHoldBurst",					BasicData_UInt,			&pointScanProtocol->nHoldBurst},
 																		{"Hold", 						BasicData_Double, 		&pointScanProtocol->holdTime},
 																		{"HoldBurstPeriod",				BasicData_Double,		&pointScanProtocol->holdBurstPeriod},
-																		{"HoldBurstPeriodIncrement",	BasicData_Double,		&pointScanProtocol->holdBurstPeriodIncr},
 																		{"StimulationDelay",			BasicData_Double,		&pointScanProtocol->stimDelay},
 																		{"NPulses",						BasicData_UInt,			&pointScanProtocol->nStimPulses},
 																		{"PulseONDuration",				BasicData_Double,		&pointScanProtocol->stimPulseONDuration},
@@ -2026,7 +2024,7 @@ INIT_ERR
 					nullChk( pointScanProtocolCopy = copy_PointScanProtocol_type(selectedPointScanProtocol) );
 				} else {
 					// set default point scan settings if there is no selected protocol
-					nullChk( pointScanProtocolCopy = init_PointScanProtocol_type("", NonResGalvoRasterScan_Default_HoldTime, 1, 0, 0, 0, NonResGalvoRasterScan_Default_StimPulseONDuration, 
+					nullChk( pointScanProtocolCopy = init_PointScanProtocol_type("", NonResGalvoRasterScan_Default_HoldTime, 1, 0, 0, NonResGalvoRasterScan_Default_StimPulseONDuration, 
 									 NonResGalvoRasterScan_Default_StimPulseOFFDuration, 1, PointJump_SinglePoints, FALSE, FALSE, 1, 1, 0, 0, 0) );
 				}
 				
@@ -2279,7 +2277,6 @@ INIT_ERR
 	double							holdTime					= 0;				
 	uInt32							nHoldBurst					= 0;				
 	double							holdBurstPeriod				= 0;		
-	double							holdBurstPeriodIncr			= 0;
 	double							stimDelay					= 0;
 	double							stimPulseONDuration			= 0;
 	double							stimPulseOFFDuration		= 0;
@@ -2318,7 +2315,6 @@ INIT_ERR
 	DAQLabXMLNode					pointSettingsAttr[] 		= { {"NHoldBurst",					BasicData_UInt,			&nHoldBurst},
 																	{"Hold", 						BasicData_Double, 		&holdTime},
 																	{"HoldBurstPeriod",				BasicData_Double,		&holdBurstPeriod},
-																	{"HoldBurstPeriodIncrement",	BasicData_Double,		&holdBurstPeriodIncr},
 																	{"StimulationDelay",			BasicData_Double,		&stimDelay},
 																	{"NPulses",						BasicData_UInt,			&nStimPulses},
 																	{"PulseONDuration",				BasicData_Double,		&stimPulseONDuration},
@@ -2332,7 +2328,7 @@ INIT_ERR
 	errChk( DLGetXMLElementAttributes("", pointSettingsXMLElement, pointSettingsAttr, NumElem(pointSettingsAttr)) );
 	
 	// store settings in data structures
-	nullChk( *pointScanProtocolPtr = init_PointScanProtocol_type(protocolName, holdTime, nHoldBurst, holdBurstPeriod, holdBurstPeriodIncr, stimDelay, stimPulseONDuration, 
+	nullChk( *pointScanProtocolPtr = init_PointScanProtocol_type(protocolName, holdTime, nHoldBurst, holdBurstPeriod, stimDelay, stimPulseONDuration, 
 								 								stimPulseOFFDuration, nStimPulses, (PointJumpMethods)jumpMethod, record, stimulate, nIntegration, nSequenceRepeat, 
 								 								startDelayInitVal, startDelayIncrement, repeatWait) );
 	OKfree(protocolName);
@@ -2858,7 +2854,7 @@ INIT_ERR
 					
 							frameScanSettings = init_RectRasterScanSet_type("default", NonResGalvoRasterScan_Default_PixelSize, 1, 0, 1, 0, NonResGalvoRasterScan_Default_PixelDwellTime); 
 							
-							pointScanProtocol = init_PointScanProtocol_type("", NonResGalvoRasterScan_Default_HoldTime, 1, 0, 0, 0, NonResGalvoRasterScan_Default_StimPulseONDuration, 
+							pointScanProtocol = init_PointScanProtocol_type("", NonResGalvoRasterScan_Default_HoldTime, 1, 0, 0, NonResGalvoRasterScan_Default_StimPulseONDuration, 
 									 NonResGalvoRasterScan_Default_StimPulseOFFDuration, 1, PointJump_SinglePoints, FALSE, FALSE, 1, 1, 0, 0, 0);
 							
 							newScanEngine = (ScanEngine_type*) init_RectRaster_type(ls, engineName, FALSE, 1, NonResGalvoRasterScan_Default_GalvoSamplingRate, NonResGalvoRasterScan_Default_PixelClockRate, 
@@ -3365,7 +3361,7 @@ INIT_ERR
 		
 		#ifdef __ImageDisplayCVI_H__
 		
-			nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayCVI_type(engine->lsModule->baseClass.workspacePanHndl, "", 10, 10, NULL) );
+			nullChk( *imgDisplayPtr = (ImageDisplay_type*)init_ImageDisplayCVI_type(engine->lsModule->baseClass.workspacePanHndl, "", NULL) );
 	
 		#else
 	
@@ -5333,7 +5329,6 @@ INIT_ERR
 		// round point scan protocol settings to galvo sampling time
 		rectRaster->pointScan.pointScanProtocol->holdTime 				= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->holdTime);
 		rectRaster->pointScan.pointScanProtocol->holdBurstPeriod 		= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->holdBurstPeriod);
-		rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr 	= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr);
 		rectRaster->pointScan.pointScanProtocol->stimDelay 				= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->stimDelay);
 		rectRaster->pointScan.pointScanProtocol->stimPulseONDuration 	= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->stimPulseONDuration);
 		rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration 	= NonResRectRasterScan_RoundToGalvoSampling(rectRaster, rectRaster->pointScan.pointScanProtocol->stimPulseOFFDuration);
@@ -6209,18 +6204,6 @@ static int CVICALLBACK NonResRectRasterScan_PointScanPan_CB (int panel, int cont
 					
 					// if value changed, then switch to unnamed protocol
 					if (currentPointScanProtocol->holdBurstPeriod != oldHoldBurstPeriod)
-						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
-					
-					break;
-					
-				case PointTab_HoldBurstPeriodIncr:
-					
-					double oldHoldBurstPeriodIncr = currentPointScanProtocol->holdBurstPeriodIncr;
-					
-					GetCtrlVal(panel, control, &currentPointScanProtocol->holdBurstPeriodIncr);
-					
-					// if value changed, then switch to unnamed protocol
-					if (currentPointScanProtocol->holdBurstPeriodIncr != oldHoldBurstPeriodIncr)
 						SwitchRectRasterPointScanToUnnamedProtocol(scanEngine);
 					
 					break;
@@ -7552,7 +7535,7 @@ INIT_ERR
 	
 		// update start delay
 		if (pointScan->pointScanProtocol->nHoldBurst > 1) {
-			pointScan->startDelay = pointScan->pointScanProtocol->holdBurstPeriod + pointScan->pointScanProtocol->holdBurstPeriodIncr - (totalJumpTime - extraStartDelay - pointScan->jumpTimes[0]);
+			pointScan->startDelay = pointScan->pointScanProtocol->holdBurstPeriod - (totalJumpTime - extraStartDelay - pointScan->jumpTimes[0]);
 			if (pointScan->startDelay < 0.0)
 				SET_ERR(NonResRectRasterScan_GeneratePointJumpSignals_Err_HoldBurstTooShort, "Hold burst period is too short.");
 		}
@@ -8712,7 +8695,7 @@ static double NonResRectRasterScan_RoundToGalvoSampling (RectRaster_type* scanEn
 	return ceil(time/samplingTime) * samplingTime;
 }
 
-static PointScanProtocol_type* init_PointScanProtocol_type (char protocolName[], double holdTime, uInt32 nHoldBurst, double holdBurstPeriod, double holdBurstPeriodIncr, double stimDelay,
+static PointScanProtocol_type* init_PointScanProtocol_type (char protocolName[], double holdTime, uInt32 nHoldBurst, double holdBurstPeriod, double stimDelay,
 														    double stimPulseONDuration, double stimPulseOFFDuration, uInt32 nStimPulses, PointJumpMethods jumpMethod, 
 															BOOL record, BOOL stimulate, uInt32 nIntegration, uInt32 nSequenceRepeat, double startDelayInitVal,
 															double startDelayIncrement, double repeatWait)
@@ -8735,7 +8718,6 @@ static PointScanProtocol_type* init_PointScanProtocol_type (char protocolName[],
 	pointScanSet->holdTime				= holdTime;
 	pointScanSet->nHoldBurst			= nHoldBurst;
 	pointScanSet->holdBurstPeriod		= holdBurstPeriod;
-	pointScanSet->holdBurstPeriodIncr	= holdBurstPeriodIncr;
 	
 	// stimulation settings
 	pointScanSet->stimDelay				= stimDelay;
@@ -8805,7 +8787,6 @@ static int SetPointScanProtocolUI (RectRaster_type* rectRaster, BOOL updateProto
 	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_NHoldBurst, rectRaster->pointScan.pointScanProtocol->nHoldBurst);
 	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_Hold, rectRaster->pointScan.pointScanProtocol->holdTime);
 	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_HoldBurstPeriod, rectRaster->pointScan.pointScanProtocol->holdBurstPeriod);
-	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_HoldBurstPeriodIncr, rectRaster->pointScan.pointScanProtocol->holdBurstPeriodIncr);
 	
 	// populate stimulation settings
 	SetCtrlVal(rectRaster->baseClass.pointScanPanHndl, PointTab_StimDelay, rectRaster->pointScan.pointScanProtocol->stimDelay);

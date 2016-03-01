@@ -266,7 +266,7 @@ discard_script_elements(ListType script_elements)
 		/* Free element */
 		if (element->MAGIC_NUM == XYMOVE) 
 			/* Free saved Positions */
-			OKfreeList(&((XYMoveElement_t *)element)->saved_positions, okfree);
+			OKfreeList(&((XYMoveElement_t *)element)->saved_positions, OKFree);
 		
 		OKfree(element);
 	}

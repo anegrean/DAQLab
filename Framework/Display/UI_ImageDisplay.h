@@ -23,8 +23,8 @@
 #define  DisplayPan_RectROI               4       /* control type: pictButton, callback function: (none) */
 #define  DisplayPan_PointROI              5       /* control type: pictButton, callback function: (none) */
 #define  DisplayPan_Select                6       /* control type: pictButton, callback function: (none) */
-#define  DisplayPan_PICTUREBUTTON_6       7       /* control type: pictButton, callback function: (none) */
-#define  DisplayPan_PICTUREBUTTON_5       8       /* control type: pictButton, callback function: (none) */
+#define  DisplayPan_Bttn2                 7       /* control type: pictButton, callback function: (none) */
+#define  DisplayPan_Bttn1                 8       /* control type: pictButton, callback function: (none) */
 
 
      /* Control Arrays: */

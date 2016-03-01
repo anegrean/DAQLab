@@ -179,7 +179,7 @@ char* 				FormatMsg						(int messageID, char fileName[], char functionName[], i
 void				OKfreeList						(ListType* listPtr, DiscardFptr_type discardFptr);
 
 // Releases memory using free() and sets the freed pointer to NULL.
-void				okfree							(void** objPtr);
+void				OKFree							(void** objPtr);
 
 
 #ifdef __cplusplus

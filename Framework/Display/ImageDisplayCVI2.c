@@ -94,7 +94,7 @@ static int buttonArray[] = {DisplayPan_Zoom, DisplayPan_RectROI, DisplayPan_Poin
 //==============================================================================
 // Static functions
 
-static int						DisplayImage				(ImageDisplayCVI_type* imgDisp, Image_type** image);
+static int						DisplayImage				(ImageDisplayCVI_type* imgDisp, Image_type** image, char** errorMsg);
 
 static int	 					ConvertToBitArray			(ImageDisplayCVI_type* imgDisp, Image_type* RGBImages[], char** errorMsg);
 
@@ -272,9 +272,10 @@ INIT_ERR
 	int 				nPixels			= 0;
 	unsigned char*		newBitArray		= NULL;
 	
-	float				px				= 0;
-	float				py				= 0;
+	int					px				= 0;
+	int					py				= 0;
 	float				zoom_ratio		= 0;
+	
 	// check if image dimensions match
 	GetImageSize(RGBImages[0], &imgWidth_R, &imgHeight_R);
 	for (int i = 1; i < 3; i++) {
@@ -287,7 +288,7 @@ INIT_ERR
 	nPixels	= imgHeight * imgWidth;
 	imgDisp->imgHeight 	= RoundRealToNearestInteger(imgHeight * imgDisp->zoom);
 	imgDisp->imgWidth 	= RoundRealToNearestInteger(imgWidth * imgDisp->zoom); 
-	zoom_ratio			= imgHeight/imgDisp->imgHeight;
+	zoom_ratio			= (float)imgHeight/imgDisp->imgHeight;
 	
 	// reallocate bitmap array
 	nullChk( newBitArray = realloc(imgDisp->bitmapBitArray, imgDisp->imgHeight * imgDisp->imgWidth * 3) );
@@ -304,9 +305,9 @@ INIT_ERR
 	
 				for (int i = 0; i < imgDisp->imgHeight; i++)
 					for (int j = 0; j < imgDisp->imgWidth; j++) {
-						px = j * zoom_ratio;
-						py = i * zoom_ratio;
-						imgDisp->bitmapBitArray[((i*imgDisp->imgWidth)+j)*3+chan] = ucharPix[(int)((py*imgWidth)+px)];
+						px = (int) (j * zoom_ratio);
+						py = (int) (i * zoom_ratio);
+						imgDisp->bitmapBitArray[((i*imgDisp->imgWidth)+j)*3+chan] = ucharPix[py*imgWidth+px];
 					}
 						
 				
@@ -438,7 +439,7 @@ RETURN_ERR
 }
 
 
-static int DisplayImage (ImageDisplayCVI_type* imgDisp, Image_type** imagePtr)
+static int DisplayImage (ImageDisplayCVI_type* imgDisp, Image_type** imagePtr, char** errorMsg)
 {
 INIT_ERR 
 	
@@ -453,7 +454,7 @@ INIT_ERR
 	
 	// retain old display image dimensions to compare later
 	imgOldHeight = imgDisp->imgHeight;
-	imgOldHeight = imgDisp->imgWidth;
+	imgOldWidth = imgDisp->imgWidth;
 	
 	// convert new image data to bit array
 	errChk( ConvertToBitArray(imgDisp, RGBImages, &errorInfo.errMsg) );
@@ -498,6 +499,8 @@ Error:
 
 static int CVICALLBACK CanvasCB (int panel, int control, int event, void *callbackData, int eventData1, int eventData2)
 {
+INIT_ERR
+
 	ImageDisplayCVI_type* display 	= (ImageDisplayCVI_type*) callbackData;   
 	int 				  state	  	= 0;
 
@@ -516,7 +519,8 @@ static int CVICALLBACK CanvasCB (int panel, int control, int event, void *callba
 			
 			if(state) {
 				display->zoom = display->zoom * (1-ZoomFactor);
-				DisplayImage(display, display->baseClass.image);	// update display
+				Image_type*	image = display->baseClass.image;
+				errChk( DisplayImage(display, &image, &errorInfo.errMsg) );	// update display
 			}
 
 		break;
@@ -528,12 +532,18 @@ static int CVICALLBACK CanvasCB (int panel, int control, int event, void *callba
 			
 			if(state) {
 				display->zoom = display->zoom * (1+ZoomFactor);
-				DisplayImage(display, display->baseClass.image);	// update display
+				Image_type*	image = display->baseClass.image;
+				errChk( DisplayImage(display, &image, &errorInfo.errMsg) );	// update display
 			}
 			
 		break;
 	}
 	
+	return 0;
+	
+Error:
+	
+PRINT_ERR
 	return 0;
 }
 

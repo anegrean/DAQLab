@@ -149,6 +149,9 @@ INIT_ERR
 	// check if already initialized
 	if (NIVisionEngineInitialized) return 0;
 
+	// change IMAQ window display thread policy
+	nullChk( imaqSetWindowThreadPolicy(IMAQ_SEPARATE_THREAD) );
+	
 	// IMAQ tool window setup
 	nullChk( imaqSetupToolWindow(TRUE, 2, &imaqTools) );
 	nullChk( imaqSetCurrentTool(IMAQ_PAN_TOOL) );

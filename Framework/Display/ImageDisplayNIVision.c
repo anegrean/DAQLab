@@ -18,8 +18,6 @@
 #include "DAQLabErrHandling.h"
 #include "ImageDisplay.h"
 #include "toolbox.h"
-#include "DataStorage.h"
-
 
 
 //==============================================================================
@@ -64,7 +62,6 @@ struct ImageDisplayNIVision {
 	Image*								NIImage;				// NI Image displayed in the window. Depending on various transformations that can be applied to the original image, this image may be different from the original image kept in the base class.
 	int									imaqWndID;				// Assigned IMAQ window ID for display.
 	HWND								imaqWndWindowsHndl;		// Windows window handle assigned to display the IMAQ image.
-	HWND								imaqToolWindowsHndl;	// IMAQ tool windows window handle.
 	
 	LONG_PTR							imaqWndProc;			// Pointer to the original imaq window procedure. This will be called by windows after the custom window procedure.
 	
@@ -149,9 +146,6 @@ INIT_ERR
 	// check if already initialized
 	if (NIVisionEngineInitialized) return 0;
 
-	// change IMAQ window display thread policy
-	nullChk( imaqSetWindowThreadPolicy(IMAQ_SEPARATE_THREAD) );
-	
 	// IMAQ tool window setup
 	nullChk( imaqSetupToolWindow(TRUE, 2, &imaqTools) );
 	nullChk( imaqSetCurrentTool(IMAQ_PAN_TOOL) );
@@ -210,12 +204,10 @@ INIT_ERR
 		
 	}
 	
-	// set image display window on top
+	// set window on top
 	nullChk( SetWindowPos(imgDisplay->imaqWndWindowsHndl, HWND_TOPMOST, 0, 0, 0, 0, (SWP_ASYNCWINDOWPOS | SWP_DRAWFRAME | SWP_NOMOVE | SWP_NOSIZE)) );
-	// set tool window on top
-	nullChk( SetWindowPos(imgDisplay->imaqToolWindowsHndl, HWND_TOPMOST, 0, 0, 0, 0, (SWP_ASYNCWINDOWPOS | SWP_DRAWFRAME | SWP_NOMOVE | SWP_NOSIZE)) );
 	
-
+	
 Error:
 	
 	return errorInfo.error;
@@ -255,7 +247,7 @@ INIT_ERR
 	HMENU			equalizeMenuHndl		= 0;	// submenu handle for "Image->Equalize" menu item in the imaq window
 	int				newIMAQWindowID			= 0;
 	intptr_t		parentPanWindowsHndl	= 0;
-										
+	imaqSetWindowThreadPolicy(IMAQ_CALLING_THREAD);									
 	ImageDisplayNIVision_type*	niImgDisp 	= malloc(sizeof(ImageDisplayNIVision_type));
 	if (!niImgDisp) return NULL;
 	
@@ -268,8 +260,7 @@ INIT_ERR
 	
 	niImgDisp->NIImage					= NULL;
 	niImgDisp->imaqWndID				= -1;
-	niImgDisp->imaqWndWindowsHndl		= 0;
-	niImgDisp->imaqToolWindowsHndl		= 0;
+	niImgDisp->imaqWndWindowsHndl		= 0;	
 	niImgDisp->imaqWndProc				= 0;
 	
 	// Base class
@@ -290,18 +281,15 @@ INIT_ERR
 	
 	// initialize NI Vision engine
 	errChk( InitializeNIVisionEngine() );
-	
 	// get an available IMAQ window handle
 	nullChk ( imaqGetWindowHandle(&newIMAQWindowID) );
+	
 	errChk(newIMAQWindowID);
 	niImgDisp->imaqWndID = newIMAQWindowID;
 	
 	// get windows IMAQ window handle
 	nullChk( niImgDisp->imaqWndWindowsHndl = (HWND) imaqGetSystemWindowHandle(niImgDisp->imaqWndID) ); 
-	
-	// get windows IMAQ tool window handle
-	nullChk( niImgDisp->imaqToolWindowsHndl = (HWND) imaqGetToolWindowHandle() );
-	
+	imaqSetWindowThreadPolicy(IMAQ_SEPARATE_THREAD);
 	// get windows parent panel handle
 	if (parentPanHndl)
 		GetPanelAttribute(parentPanHndl, ATTR_SYSTEM_WINDOW_HANDLE, &parentPanWindowsHndl);
@@ -309,7 +297,8 @@ INIT_ERR
 	// embed display and toolbox in parent window
 	if (parentPanWindowsHndl) {
 		SetParent(niImgDisp->imaqWndWindowsHndl, (HWND) parentPanWindowsHndl);
-		SetParent(niImgDisp->imaqToolWindowsHndl, (HWND) parentPanWindowsHndl);
+		HWND imaqToolWindowsHndl = imaqGetToolWindowHandle();
+		SetParent(imaqToolWindowsHndl, (HWND) parentPanWindowsHndl);
 	}
 	
 	// init IMAQ image buffer 
@@ -393,9 +382,10 @@ INIT_ERR
 	
 	
 	// add custom window callback function
-	SetWindowSubclass(niImgDisp->imaqWndWindowsHndl, CustomImageDisplayNIVision_CB, 0, (DWORD_PTR)niImgDisp);
 	
-	// adjust image display and tool windows
+	SetWindowSubclass(niImgDisp->imaqWndWindowsHndl, CustomImageDisplayNIVision_CB, 0, (DWORD_PTR)niImgDisp);
+	imaqSetWindowThreadPolicy(IMAQ_SEPARATE_THREAD);
+	// adjust display window
 	AdjustNIVisionImageDisplay(niImgDisp);
 	
 	return niImgDisp;
@@ -843,7 +833,7 @@ INIT_ERR
 Error:
 	
 	OKfree(errorInfo.errMsg);
-	return DefSubclassProc(hWnd, msg, wParam, lParam);;
+	return DefSubclassProc(hWnd, msg, wParam, lParam);
 }
 
 static int ApplyDisplayTransform (Image* image, ImageDisplayTransforms dispTransformFunc)

@@ -13,6 +13,7 @@
 #include "DAQLab.h"
 #include <formatio.h>
 #include "cvidef.h"
+#include <tcpsupp.h>
 #include <toolbox.h>
 #include <userint.h>
 #include "TaskController.h"
@@ -37,6 +38,14 @@
 #define NUMTHREADS		10																			  
 #define MAXBUFSIZE		0x40000    
 #define MAXPACKETSIZE   0x8000      //bytes
+
+// new definitions
+#define MAXBUF 			90000
+#define COMMLENGTH		19
+
+#define CommPortNumber  7
+#define DataPortNumber  8 
+#define ServHostName    "192.168.1.10"
 	
 //==============================================================================
 // Types
@@ -57,6 +66,68 @@ typedef struct _PMTregcommand {
 	
 } PMTregcommand;
 
+#define MAXBUF 90000
+
+#define STATREG		"STAT"
+#define CTRLREG 	"CTRL"
+#define PMT1THRES 	"PM1T"
+#define PMT1OFFSET 	"PM1O"  
+#define PMT1GAIN 	"PM1G"
+#define PMT2THRES 	"PM2T"
+#define PMT2OFFSET 	"PM2O"  
+#define PMT2GAIN 	"PM2G"
+#define PMT3THRES 	"PM3T"
+#define PMT3OFFSET 	"PM3O"  
+#define PMT3GAIN 	"PM3G"
+#define PMT4THRES 	"PM4T"
+#define PMT4OFFSET 	"PM4O"  
+#define PMT4GAIN 	"PM4G"
+
+/*---------------------------------------------------------------------------*/
+/* Macros						                                             */
+/*---------------------------------------------------------------------------*/
+#define tcpChk(f) if ((g_TCPError=(f)) < 0) {ReportTCPError(); goto Done;} else
+
+/*---------------------------------------------------------------------------*/
+/* Internal function prototypes                                              */
+/*---------------------------------------------------------------------------*/
+static int CVICALLBACK TCPCommThreadFunction (void *functionData);
+static int CVICALLBACK TCPDataThreadFunction (void *functionData);  
+static void CommConnect (void);
+static void CommDisconnect (void);
+static void DataConnect (void);
+static void DataDisconnect (void);
+int CVICALLBACK CommandTCPCB (unsigned handle, int event, int error,
+                             void *callbackData);
+int CVICALLBACK DataTCPCB (unsigned handle, int event, int error,
+                             void *callbackData);
+static void ReportTCPError (void);
+int transmit(char* transmitBuf,int len);
+int SendReg(char* reg,unsigned long regvalue);
+
+/*---------------------------------------------------------------------------*/
+/* Module-globals                                                            */
+/*---------------------------------------------------------------------------*/
+static int			gRunning = 0;
+static int			gTCPCommThreadFunctionId = 0;
+static int			gTCPDataThreadFunctionId = 0;
+static unsigned int g_hcommtcp;
+static unsigned int g_hdatatcp;  
+static int          g_hmainPanel;
+static int			g_TCPError = 0;
+unsigned long long  gReceivedBytes;
+unsigned long long  gpreviousReceivedBytes; 
+char 				commreceiveBuf[256] = {0};
+unsigned short      dataBuf[MAXBUF];  
+int 				testcounter= 15;
+double 				previoustime;
+int 				filehandle=0;
+unsigned int 		gRegvalue; 
+unsigned int        g_reply_received; 
+
+unsigned long 		g_controlreg	 = 0;  
+
+
 
 //==============================================================================
 // Static global variables
@@ -75,16 +146,13 @@ unsigned int 			PMTThread2ID;
 PMTregcommand 			newcommand;
 int 					readerror				=0; 
 int 					readdata				=0;
-int 					nrsamples_in_iteration;   				// requested amount of samples
+int 					nrsamples_in_iteration=200*100;   				// requested amount of samples
 size_t 					nrsamples;				  				// number of samples measured 
 int 					iterationnr;              				// current iteration number, passed in data
 
-DefineThreadSafeScalarVar(int,PMTCommandFlag,0);				// do a PMT controller register command in pmt thread
-DefineThreadSafeScalarVar(unsigned long,PMTControllerData,0); 	// current PMT controller data
-DefineThreadSafeScalarVar(int ,PMTBufsize,0); 	    			// pmt buffer size        
-//DefineThreadSafeScalarVar(unsigned int,PMTnewbufsizeflag,0); 	// newbufsize flag
-DefineThreadSafeScalarVar(unsigned int,AcqBusy,0); 	            // acquisition is busy 
-DefineThreadSafeScalarVar(unsigned int,ReadyForReading,0); 	    // acquisition thread is ready for reading
+DefineThreadSafeScalarVar(unsigned int,ReadyForComm,0); 	    // command thread is ready for commands    
+DefineThreadSafeScalarVar(unsigned int,ReadyForData,0); 	    // data receiving thread is ready for data
+
 
 //==============================================================================
 // Static functions
@@ -92,87 +160,105 @@ DefineThreadSafeScalarVar(unsigned int,ReadyForReading,0); 	    // acquisition t
 static unsigned int 	GetAcquisitionBusy 				(void);
 static void 			SetMeasurementMode 				(int mode);
 static int 				GetPMTControllerVersion 		(void);
-static int 				ReadBuffer 						(int bufsize);
 
 //==============================================================================
 // Global functions
 
-int CVICALLBACK 		PMTThreadFunction				(void *(functionData));
-int CVICALLBACK 		PMTThreadFunction2				(void *(functionData));    
-int 					StartDAQThread					(int mode, CmtThreadPoolHandle poolHandle) ;
-int 					StopDAQThread					(CmtThreadPoolHandle poolHandle);
+//int CVICALLBACK 		PMTThreadFunction				(void *(functionData));
+//int CVICALLBACK 		PMTThreadFunction2				(void *(functionData));    
+int 					StartThreads			    	(CmtThreadPoolHandle poolHandle) ;
+int 					StopThreads				    	(CmtThreadPoolHandle poolHandle);
 int 					PMTReset						(void);
-unsigned long 			ImReadReg						(unsigned long regaddress);
-int 					ImWriteReg						(unsigned long regaddress,unsigned long regvalue);
+int 					PMT_SetGain 					(int PMTnr, double PMTGain);
+int 					PMT_SetThresh 					(int PMTnr, double PMTThreshold);
+int 					PMT_SetOffset 					(int PMTnr, double PMTOffset);
 
 
-static unsigned int GetAcquisitionBusy (void)
-{
-	return GetAcqBusy();
-}
 
 static void SetMeasurementMode (int mode)
 {
 	 measurementmode = mode;
 }
 
-void PMTSetBufferSize (int mode, double sampleRate, int itsamples)
-{
-	int bufsize	= 0;
-	 
-	if (mode == TASK_CONTINUOUS) {   
-		// continuous mode, bufsize based on sample freq
-		if (sampleRate > 500 * 1e3) {
-			bufsize = MAXBUFSIZE;  
-		}
-		else if (sampleRate > 250 * 1e3) {
-			bufsize = 0x20000;  
-		}
-		else if (sampleRate > 125 * 1e3) {
-			bufsize = 0x10000;  
-		}
-		else if (sampleRate > 64 * 1e3) {
-			bufsize = 0x8000;  
-		}
-		else if (sampleRate > 32 * 1e3) {
-			bufsize = 0x4000;  
-		}
-		else 
-			bufsize = 0x2000;   
-	
-	 } else {  
-		// finite mode, bufsize based on sample requested samples
-	 	nrsamples_in_iteration = itsamples;
-		// 8 bytes per sample (pixel)
-	 	bufsize = 8 * itsamples;
-		if (bufsize > MAXBUFSIZE) bufsize = MAXBUFSIZE;   //use max bufsize
-	 }
-	 
-	 SetPMTBufsize(bufsize);  
-	 //SetPMTnewbufsizeflag(1);
-}
 
 int ReadPMTReg (unsigned long regaddress, unsigned long *regval)
 {
 	int 			error = 0;
 	unsigned long 	reply = 0;
+	char *cmdstr;
 	 
-	if(!VUPCI_Get_Reg(regaddress, &reply))
-		error = -1;
-	
-	*regval = reply;
+	switch (regaddress){
+		case CTRL_REG:
+			return g_controlreg;
+		case STAT_REG:
+			cmdstr="PhotonCtr STAT?___\n"; 
+			break;
+		case VERS_REG:
+			cmdstr="PhotonCtr VERS?___\n";   
+			break;
+		case ERROR_REG:
+			cmdstr="PhotonCtr ERRR?___\n"; 
+			break;
+		case PMT1_CTRL_REG:
+			cmdstr="PhotonCtr PMT1?___\n"; 
+			break;
+		case PMT2_CTRL_REG:
+			cmdstr="PhotonCtr PMT2?___\n"; 
+			break;
+		case PMT3_CTRL_REG:
+			cmdstr="PhotonCtr PMT3?___\n"; 
+			break;
+		case PMT4_CTRL_REG:
+			cmdstr="PhotonCtr PMT4?___\n"; 
+			break;
+	}
+	g_reply_received=0;
+	error=transmit(cmdstr,COMMLENGTH);
+	//wait for reply?
+	while (g_reply_received==0){
+			//wait
+		ProcessSystemEvents();
+	}
+	*regval=gRegvalue;
 	
 	return error;
 }
 
 int WritePMTReg (unsigned long regaddress, unsigned long regvalue)
 {
-	 int 			error = 0;
+INIT_ERR 
 	 
-	 if(!VUPCI_Set_Reg(regaddress, regvalue))
-		error = -1;
-	 
-	 return error;
+	 switch (regaddress){
+		case CTRL_REG:
+			errChk(SendReg(CTRLREG,regvalue));  
+			break;
+		case STAT_REG:
+			errChk(SendReg(STATREG,regvalue)); 
+			break;
+		case VERS_REG:
+			//?  
+			break;
+		case ERROR_REG:
+		//	cmdstr="PhotonCtr ERRR?\n"; 
+			break;
+		case PMT1_CTRL_REG:
+		//	cmdstr="PhotonCtr PMT1?\n"; 
+			break;
+		case PMT2_CTRL_REG:
+		//	cmdstr="PhotonCtr PMT2?\n"; 
+			break;
+		case PMT3_CTRL_REG:
+		//	cmdstr="PhotonCtr PMT3?\n"; 
+			break;
+		case PMT4_CTRL_REG:
+		//	cmdstr="PhotonCtr PMT4?\n"; 
+			break;
+	}
+	
+
+Error:
+	
+	return errorInfo.error;
 }
 
 ///  HIFN  Gets the PMT Controller Hardware Version
@@ -199,31 +285,56 @@ Error:
 }
 
 
+int SetPMTDefault(void)
+{
+INIT_ERR
+
+	double zero=0.0;
+	
+	errChk(PMT_SetGain(PMT1, zero));
+	errChk(PMT_SetGain(PMT2, zero));   
+	errChk(PMT_SetGain(PMT3, zero));   
+	errChk(PMT_SetGain(PMT4, zero)); 
+	errChk(PMT_SetThresh(PMT1, 0.1));
+	errChk(PMT_SetThresh(PMT2, 0.1));   
+	errChk(PMT_SetThresh(PMT3, 0.1));   
+	errChk(PMT_SetThresh(PMT4, 0.1)); 
+	errChk(PMT_SetOffset(PMT1,0.3));  //default value
+	errChk(PMT_SetOffset(PMT2,0.3));  //default value     
+	errChk(PMT_SetOffset(PMT3,0.3));  //default value     
+	errChk(PMT_SetOffset(PMT4,0.3));  //default value 
+	
+Error:
+	
+	return errorInfo.error;  
+}
+
+	   
 int PMTController_Init (void)
 {
 INIT_ERR
 
 	unsigned long 	timeout	= 5000;  //in ms
 	
-	InitializeAcqBusy();
-	InitializePMTCommandFlag();
-	InitializePMTControllerData();
-	InitializePMTBufsize();   
-	//InitializePMTnewbufsizeflag(); 
-	InitializeReadyForReading();
+	gRunning = 1;
 	
-	SetPMTCommandFlag(0);
-	SetPMTBufsize(0);   
-//	SetPMTnewbufsizeflag(0);
-	SetAcqBusy(0);
-	SetReadyForReading(0);
+	InitializeReadyForComm();
+	InitializeReadyForData();  
 	
-	errChk(VUPCI_Open());
-	errChk(GetPMTControllerVersion());
+	SetReadyForComm(0);
+	SetReadyForData(0);
 	
-	errChk(PMTReset());
+	errChk( StartThreads(DEFAULT_THREAD_POOL_HANDLE));   
+
+	//wait until threads are running
+	while (!GetReadyForComm()||!GetReadyForData())
+		//wait until thread has started
+		ProcessSystemEvents();
 	
-	VUPCI_Set_Read_Timeout(timeout);
+	//	errChk(GetPMTControllerVersion());
+	 //set default values
+	SetPMTDefault();
+
 	
 Error:
 	
@@ -234,32 +345,28 @@ int PMTController_Finalize (void)
 {    
 INIT_ERR
 	 
-	 SetAcqBusy(0); 
-	 UninitializeAcqBusy();  
-	 UninitializePMTCommandFlag();
-	 UninitializePMTControllerData();
-	 UninitializePMTBufsize();   
-//	 UninitializePMTnewbufsizeflag();  
-	 UninitializeReadyForReading();
+
+	 UninitializeReadyForComm();
+	 UninitializeReadyForData();    
+	
 	 
 	 //clear control register, make sure PMT's are disabled
 	 errChk(WritePMTReg(CTRL_REG,0));     
-	 VUPCI_Close();
+
 	 
 Error:
 	 
 	 return errorInfo.error;
 }
 
-// called in pmt thread
-static int ReadBuffer (int bufsize)
+
+static int ParseData (unsigned short int* sampleBuffer,int numbytes)
 {
 INIT_ERR
 
 	int 					result			= 0;
 	DataPacket_type*  		dataPacket		= NULL;
 	char*					errMsg			= NULL;  
-	unsigned short int* 	sampleBuffer	= NULL;   
 	void*     				pmtdataptr		= NULL;
 	size_t 					numpixels		= 0;
 	size_t 					numshorts		= 0;
@@ -271,27 +378,10 @@ INIT_ERR
 	DSInfo_type* 			dsInfo			= NULL;
 	
 	
-	nullChk( sampleBuffer 	= malloc(bufsize) ); 
-	
-	result 			= VUPCI_Read_Buffer(sampleBuffer, bufsize);
-	
-	if((result < 0) && (GetAcqBusy() == 0)) { //only pass errors when acq is busy  
-		OKfree(sampleBuffer);  
-		return 0;
-	}
-	
-	if (result < 0) {  
-		//error
-		readerror	= 1;
-		errcode		= ~result;
-		result		= 0;
-		//timeout occured, skip this read
-	}
-	
-	if (result > 0) {
+	if (numbytes > 0) {
 		// deinterlace data here
-		numpixels 	= result/8;  //8 bytes per pixel, result gives number of bytes
-		numshorts 	= result/2;
+		numpixels 	= numbytes/8;  //8 bytes per pixel, result gives number of bytes
+		numshorts 	= numbytes/2;
 		ndatapoints = numshorts/4;
 		//transpose data array
 		TransposeData(sampleBuffer, VAL_SHORT_INTEGER, numshorts, 4);
@@ -306,44 +396,26 @@ INIT_ERR
 					//to be repaired in hardware!
 					switch (i) {
 							
-						case 0: 
+						case 0: 			  
 							
-							swappedi = 2;
+							swappedi = 0;//2;
 							break;
 							
 						case 1:
 							
-							swappedi = 3;
+							swappedi = 1;//3;
 							break;
 							
 						case 2:
 							
-							swappedi = 0;
+							swappedi = 2;//0;
 							break;
 							
 						case 3:
 							
-							swappedi = 1;
+							swappedi = 3;//1;
 							break;
 					}
-				/*	//chop data in MAXPACKETSIZE blocks
-					bytes_send=0;
-					while (bytes_send<totalbytes){
-						//start of data block
-						dataindex=(swappedi*ndatapoints)+(bytes_send/sizeof(unsigned short));  
-						if ((totalbytes-bytes_send)>MAXPACKETSIZE) {
-							//send block
-							blksize=MAXPACKETSIZE;
-							bytes_send+=MAXPACKETSIZE;   
-						}
-						else {
-							//send remaing bytes
-							blksize=totalbytes-bytes_send; 	
-							bytes_send=ndatapoints;
-						}
-						nullChk(pmtdataptr = malloc(blksize)); 
-						memcpy(pmtdataptr, &sampleBuffer[dataindex], blksize);
-					//end chop data in MAXPACKETSIZE blocks */  
 					//full block code
 						nullChk(pmtdataptr = malloc(totalbytes)); 
 						memcpy(pmtdataptr, &sampleBuffer[swappedi*ndatapoints], totalbytes);
@@ -367,19 +439,19 @@ INIT_ERR
 			if (nrsamples >= nrsamples_in_iteration){
 				//iteration is done
 				nrsamples = 0;
-				PMTStopAcq(); 
+				//needed?
+			//	PMTStopAcq(); 
 				errChk( TaskControlIterationDone(gtaskControl, 0, "", FALSE, &errorInfo.errMsg) );   
 			}
 			else {
 				if (((nrsamples_in_iteration-nrsamples)*8)<MAXBUFSIZE) {
 			    //read last portion of the data, but reduce read size
-				SetPMTBufsize((nrsamples_in_iteration-nrsamples)*8);
+		//		SetPMTBufsize((nrsamples_in_iteration-nrsamples)*8);
 				}
 			}
 		}
 	}
 	
-	OKfree(sampleBuffer);
 	
 	return result;
 	
@@ -402,32 +474,28 @@ Error:
 int PMT_SetMode (int PMTnr, PMT_Mode_type mode)  
 {
 INIT_ERR
-
-	unsigned long 	controlreg	 = 0;
-	
-	errChk( ReadPMTReg(CTRL_REG, &controlreg) );
 	
 	if(mode == PMT_MODE_ON){
 		switch(PMTnr){
 				
 			case PMT1:
 				
-				controlreg = controlreg|PMT1HV_BIT;  //set bit
+				g_controlreg = g_controlreg|PMT1HV_BIT|PMT1EN_BIT;  //set bit
 				break;
 				
 			case PMT2:
 				
-				controlreg = controlreg|PMT2HV_BIT;
+				g_controlreg = g_controlreg|PMT2HV_BIT|PMT2EN_BIT;
 				break;
 				
 			case PMT3:
 				
-				controlreg = controlreg|PMT3HV_BIT;
+				g_controlreg = g_controlreg|PMT3HV_BIT|PMT3EN_BIT;
 				break;
 				
 			case PMT4:
 				
-				controlreg = controlreg|PMT4HV_BIT;
+				g_controlreg = g_controlreg|PMT4HV_BIT|PMT4EN_BIT;
 				break;
 		}
 	} else {
@@ -435,26 +503,30 @@ INIT_ERR
 				
 			case PMT1:
 				
-				controlreg = controlreg&(~PMT1HV_BIT);   //clear bit
+				g_controlreg = g_controlreg&(~PMT1HV_BIT);   //clear bit
+				g_controlreg = g_controlreg|PMT1EN_BIT;   
 				break;
 				
 			case PMT2:
 				
-				controlreg = controlreg&(~PMT2HV_BIT);
+				g_controlreg = g_controlreg&(~PMT2HV_BIT);
+				g_controlreg = g_controlreg|PMT2EN_BIT;   
 				break;
 				
 			case PMT3:
 				
-				controlreg = controlreg&(~PMT3HV_BIT);
+				g_controlreg = g_controlreg&(~PMT3HV_BIT);
+				g_controlreg = g_controlreg|PMT3EN_BIT;    
 				break;
 				
 			case PMT4:
-				controlreg = controlreg&(~PMT4HV_BIT);
+				g_controlreg = g_controlreg&(~PMT4HV_BIT);
+				g_controlreg = g_controlreg|PMT4EN_BIT; 
 				break;
 		}
 	}
 		//write control register
-	errChk( WritePMTReg(CTRL_REG, controlreg) );  
+	errChk( WritePMTReg(CTRL_REG, g_controlreg) );  
 	
 Error:
 	
@@ -466,30 +538,28 @@ int PMT_SetFan (int PMTnr, BOOL value)
 {
 INIT_ERR
 
-	unsigned long 	controlreg	= 0;
 	
-	errChk( ReadPMTReg(CTRL_REG, &controlreg) );    
 	
 	if(value){				//Fan On
 		switch(PMTnr){
 				
 			case PMT1:
-				controlreg = controlreg|PMT1FAN_BIT;  //set bit
+				g_controlreg = g_controlreg|PMT1FAN_BIT|PMT1EN_BIT;  //set bit
 				break;
 				
 			case PMT2:
 				
-				controlreg = controlreg|PMT2FAN_BIT;
+				g_controlreg = g_controlreg|PMT2FAN_BIT|PMT2EN_BIT;
 				break;
 				
 			case PMT3:
 				
-				controlreg = controlreg|PMT3FAN_BIT;
+				g_controlreg = g_controlreg|PMT3FAN_BIT|PMT3EN_BIT;
 				break;
 				
 			case PMT4:
 				
-				controlreg = controlreg|PMT4FAN_BIT;
+				g_controlreg = g_controlreg|PMT4FAN_BIT|PMT4EN_BIT;
 				break;
 		}
 	}
@@ -497,27 +567,31 @@ INIT_ERR
 		switch(PMTnr){
 			case PMT1:
 				
-				controlreg = controlreg&(~PMT1FAN_BIT);   //clear bit
+				g_controlreg = g_controlreg&(~PMT1FAN_BIT);   //clear bit
+				g_controlreg = g_controlreg|PMT1EN_BIT; 
 				break;
 				
 			case PMT2:
 				
-				controlreg = controlreg&(~PMT2FAN_BIT);
+				g_controlreg = g_controlreg&(~PMT2FAN_BIT);
+				g_controlreg = g_controlreg|PMT2EN_BIT; 
 				break;
 				
 			case PMT3:
 				
-				controlreg = controlreg&(~PMT3FAN_BIT);
+				g_controlreg = g_controlreg&(~PMT3FAN_BIT);
+				g_controlreg = g_controlreg|PMT3EN_BIT; 
 				break;
 				
 			case PMT4:
 				
-				controlreg = controlreg&(~PMT4FAN_BIT);
+				g_controlreg = g_controlreg&(~PMT4FAN_BIT);
+				g_controlreg = g_controlreg|PMT4EN_BIT; 
 				break;
 		}
 	}
 	//write control register
-	errChk(WritePMTReg(CTRL_REG,controlreg)); 
+	errChk(WritePMTReg(CTRL_REG,g_controlreg)); 
 	
 Error:
 	
@@ -529,30 +603,27 @@ int PMT_SetCooling (int PMTnr, BOOL value)
 {
 INIT_ERR
 
-	unsigned long 	controlreg	= 0;
-	
-	errChk(ReadPMTReg(CTRL_REG,&controlreg));    
 	
 	if(value){			//Peltier ON
 		switch(PMTnr){
 				
 			case PMT1:
 				
-				controlreg = controlreg|PMT1PELT_BIT;  //set bit
+				g_controlreg = g_controlreg|PMT1PELT_BIT|PMT1EN_BIT;  //set bit
 				break;
 				
 			case PMT2:
 				
-				controlreg = controlreg|PMT2PELT_BIT;
+				g_controlreg = g_controlreg|PMT2PELT_BIT|PMT2EN_BIT;
 				break;
 				
 			case PMT3:
 				
-				controlreg = controlreg|PMT3PELT_BIT;
+				g_controlreg = g_controlreg|PMT3PELT_BIT|PMT3EN_BIT;
 				break;
 				
 			case PMT4:
-				controlreg = controlreg|PMT4PELT_BIT;
+				g_controlreg = g_controlreg|PMT4PELT_BIT|PMT4EN_BIT;
 				break;
 		}
 	}
@@ -561,27 +632,31 @@ INIT_ERR
 				
 			case PMT1:
 				
-				controlreg = controlreg&(~PMT1PELT_BIT);   //clear bit
+				g_controlreg = g_controlreg&(~PMT1PELT_BIT);   //clear bit
+				g_controlreg = g_controlreg|PMT1EN_BIT; 
 				break;
 				
 			case PMT2:
 				
-				controlreg = controlreg&(~PMT2PELT_BIT);
+				g_controlreg = g_controlreg&(~PMT2PELT_BIT);
+				g_controlreg = g_controlreg|PMT2EN_BIT; 
 				break;
 				
 			case PMT3:
 				
-				controlreg = controlreg&(~PMT3PELT_BIT);
+				g_controlreg = g_controlreg&(~PMT3PELT_BIT);
+				g_controlreg = g_controlreg|PMT3EN_BIT; 
 				break;
 				
 			case PMT4:
 				
-				controlreg = controlreg&(~PMT4PELT_BIT);
+				g_controlreg = g_controlreg&(~PMT4PELT_BIT);
+				g_controlreg = g_controlreg|PMT4EN_BIT; 
 				break;
 		}
 	}
 	//write control register
-	errChk(WritePMTReg(CTRL_REG,controlreg));
+	errChk(WritePMTReg(CTRL_REG,g_controlreg));
 	
 Error:
 	return errorInfo.error;
@@ -589,53 +664,78 @@ Error:
 
 
 ///  HIFN  Sets the PMT gain
-///  HIPAR PMTnr/PMT number,PMTGain /Gain, range ......
+///  HIPAR PMTnr/PMT number,PMTGain /Gain in volts
 ///  HIRET returns error, no error when 0
-int PMT_SetGainTresh (int PMTnr, unsigned int PMTGain, unsigned int PMTThreshold)
+int PMT_SetGain (int PMTnr, double PMTGain)
 {
 INIT_ERR
 
-	unsigned long 	combinedval	= 0;
-	unsigned long 	THMASK		= 0x0000FFFF;
-	unsigned long 	GAINMASK	= 0xFFFF0000; 
-	unsigned long 	controlreg	= 0;
+	unsigned short bitval;
 	
-	errChk( ReadPMTReg(CTRL_REG, &controlreg) );    
- 
-	combinedval = ((PMTGain<<16)&GAINMASK) + (PMTThreshold&THMASK);   
+	bitval=ceil(PMTGain*(4096/1.0));
+	switch (PMTnr){
+		case PMT1:	errChk(SendReg(PMT1GAIN,bitval)); 
+			break;
+		case PMT2:	errChk(SendReg(PMT2GAIN,bitval)); 
+			break;
+		case PMT3:	errChk(SendReg(PMT3GAIN,bitval)); 
+			break;
+		case PMT4:	errChk(SendReg(PMT4GAIN,bitval)); 
+			break;
+	}
 	
-	switch(PMTnr){
-			
-		case PMT1:
-			
-			errChk( WritePMTReg(PMT1_CTRL_REG, combinedval) );  
-			controlreg = controlreg|UPDPMT12_BIT; //set bit  
-			errChk( WritePMTReg(CTRL_REG,controlreg) );   
-			controlreg = controlreg&~UPDPMT12_BIT;  //clear bit 
+Error:
+	return errorInfo.error;
+}
+
+///  HIFN  Sets the PMT threshold
+///  HIPAR PMTnr/PMT number,PMTThreshold in volts.
+///  HIRET returns error, no error when 0
+int PMT_SetThresh (int PMTnr, double PMTThreshold)
+{
+INIT_ERR
+
+	unsigned short bitval;
+	
+	bitval=ceil(PMTThreshold*(65535/2.5)); 
+	switch (PMTnr){
+		case PMT1:	errChk(SendReg(PMT1THRES,bitval)); 
 			break;
-			
-		case PMT2:
-			
-			errChk( WritePMTReg(PMT2_CTRL_REG, combinedval) );  
-			controlreg = controlreg|UPDPMT12_BIT;  //set bit 
-			errChk( WritePMTReg(CTRL_REG, controlreg) );   
-			controlreg = controlreg&~UPDPMT12_BIT;  //clear bit 
+		case PMT2:	errChk(SendReg(PMT2THRES,bitval)); 
 			break;
-			
-		case PMT3:
-			
-			errChk( WritePMTReg(PMT3_CTRL_REG, combinedval) );
-			controlreg = controlreg|UPDPMT34_BIT;  //set bit   
-			errChk( WritePMTReg(CTRL_REG,controlreg) );   
-			controlreg = controlreg&~UPDPMT34_BIT;  //clear bit 
+		case PMT3:	errChk(SendReg(PMT3THRES,bitval)); 
 			break;
-			
-		case PMT4:
-			
-			errChk( WritePMTReg(PMT4_CTRL_REG, combinedval)); 
-			controlreg = controlreg|UPDPMT34_BIT;  //set bit   
-			errChk( WritePMTReg(CTRL_REG, controlreg));   
-			controlreg = controlreg&~UPDPMT34_BIT;  //clear bit 
+		case PMT4:	errChk(SendReg(PMT4THRES,bitval)); 
+			break;
+	}
+	
+Error:
+	return errorInfo.error;
+}
+
+
+///  HIFN  Sets the PMT offset
+///  HIPAR PMTnr/PMT number,PMTOffset in volts
+///  HIRET returns error, no error when 0
+int PMT_SetOffset (int PMTnr, double PMTOffset)
+{
+INIT_ERR
+
+	unsigned short bitval;
+
+	//offset=0.55V with bitvalue 0
+	//and -0.195V with bitvalue 65535
+	//so offset=(-0.195-0.55)/65535.bitvalue+0.55
+	// bitvalue=
+	bitval=ceil((PMTOffset-0.55)*65535/(-0.195-0.55));
+	switch (PMTnr){
+		case PMT1:	errChk(SendReg(PMT1OFFSET,bitval)); 
+			break;
+		case PMT2:	errChk(SendReg(PMT2OFFSET,bitval)); 
+			break;
+		case PMT3:	errChk(SendReg(PMT3OFFSET,bitval)); 
+			break;
+		case PMT4:	errChk(SendReg(PMT4OFFSET,bitval)); 
 			break;
 	}
 	
@@ -645,32 +745,28 @@ Error:
 
 
 
-int ConvertVoltsToBits(float value_in_volts)
+///  HIFN  Sets the PMT gain
+///  HIPAR PMTnr/PMT number,PMTGain /Gain, range ......
+///  HIRET returns error, no error when 0
+int SetPMTTresh (int PMTnr,double threshold)
 {
-	  int 		value_in_bits	= 0;
-	  double 	voltsperbit		= 1/65535.0;
-	  
-	  //1V corresponds with a bitvalue of 65535
-	  value_in_bits = value_in_volts/voltsperbit;
-	  
-	  return value_in_bits;
+INIT_ERR
+
+	errChk( PMT_SetThresh(PMTnr,threshold));       
+Error:
+	
+	return errorInfo.error;
 }
 
 ///  HIFN  Sets the PMT gain
 ///  HIPAR PMTnr/PMT number,PMTGain /Gain, range ......
 ///  HIRET returns error, no error when 0
-int SetPMTGainTresh (int PMTnr, double gain, double threshold)
+int SetPMTGain (int PMTnr, double gain)
 {
 INIT_ERR
 
-	unsigned int 	gain_in_bits		= 0;
-	unsigned int 	threshold_in_bits	= 0;
-
-	gain_in_bits = ConvertVoltsToBits(gain);
-	threshold_in_bits = ConvertVoltsToBits(threshold);
-	
-	errChk( PMT_SetGainTresh(PMTnr, gain_in_bits, threshold_in_bits) );
-
+	errChk( PMT_SetGain(PMTnr,gain));
+     
 Error:
 	
 	return errorInfo.error;
@@ -681,16 +777,13 @@ int PMT_SetTestMode(BOOL testmode)
 {
 INIT_ERR
 
-	unsigned long 	controlreg	= 0;
-	
-	errChk( ReadPMTReg(CTRL_REG, &controlreg) );    
 	
 	if (testmode) 
-		controlreg = controlreg|TESTMODE0_BIT;  //set bit
+		g_controlreg = g_controlreg|TESTMODE0_BIT;  //set bit
 	else 
-		controlreg = controlreg&(~TESTMODE0_BIT);  //clear bit 
+		g_controlreg = g_controlreg&(~TESTMODE0_BIT);  //clear bit 
 	
-	errChk( WritePMTReg(CTRL_REG, controlreg) ); 
+	errChk( WritePMTReg(CTRL_REG, g_controlreg) ); 
 		   
 Error:
 	return errorInfo.error;
@@ -702,7 +795,9 @@ int PMTStartAcq(TaskMode_type mode, TaskControl_type* taskControl, double sampli
 {
 INIT_ERR
 
-	unsigned long 	controlreg	= 0;
+	
+//test lex
+//	filehandle=OpenFile("test.bin",VAL_WRITE_ONLY,VAL_TRUNCATE,VAL_BINARY);
 	
 	// assign task controller to global (should be avoided in the future!)
 	gtaskControl = taskControl;
@@ -720,15 +815,15 @@ INIT_ERR
 	SetMeasurementMode(mode);
 	errChk( PMTClearFifo() ); 
 	
-	errChk( StartDAQThread(mode, DEFAULT_THREAD_POOL_HANDLE) );
+	
 	
 	readdata = 1;   //start reading       
-	errChk( ReadPMTReg(CTRL_REG, &controlreg) );     
+	 
 	//set app start bit  
-	controlreg = controlreg|APPSTART_BIT;
-	errChk( WritePMTReg(CTRL_REG, controlreg) );
+	g_controlreg = g_controlreg|APPSTART_BIT;
+	errChk( WritePMTReg(CTRL_REG, g_controlreg) );
 	
-	while (!GetReadyForReading())
+	while (!GetReadyForData())
 		//wait until thread has started
 		ProcessSystemEvents();
 	
@@ -743,7 +838,11 @@ int PMTStopAcq(void)
 {
 INIT_ERR
 
-	unsigned long 			controlreg;
+//test lex
+//	if (filehandle!=0) {
+//		CloseFile(filehandle);
+		filehandle=0;
+//	}
 	
 	//send null packet(s)
 	for (int i = 0; i < MAX_CHANNELS; i++)
@@ -752,45 +851,45 @@ INIT_ERR
 	
 	
 	readdata = 0;  //stop reading  
-	errChk( StopDAQThread(DLGetCommonThreadPoolHndl()) );
+
 
 	for (int i = 0; i < MAX_CHANNELS; i++)
 		OKfree(gchannels[i]);
 	
 	//tell hardware to stop
-	errChk( ReadPMTReg(CTRL_REG, &controlreg) );    
 	//set app start bit  
-	controlreg = controlreg&~APPSTART_BIT; //clear appstart bit
-	errChk( WritePMTReg(CTRL_REG,controlreg) );
+	g_controlreg = g_controlreg&~APPSTART_BIT; //clear appstart bit
+	errChk( WritePMTReg(CTRL_REG,g_controlreg) );
 	
 Error:
 
 	return errorInfo.error;
 }
 
+
+
+
 /// HIFN  resets the PMT Controller 
 /// HIRET returns error, no error when 0
 int PMTReset(void)
 {
-INIT_ERR
+INIT_ERR  
 
-	unsigned long 	controlreg	= 0;		// clear control reg 
-	double 			zero		= 0.0;
-	double 			twenty_mV	= 0.020;
+	
 
 	// set reset bit   
-	controlreg = controlreg|RESET_BIT; 
-	errChk(WritePMTReg(CTRL_REG, controlreg));
+/*	g_controlreg = g_controlreg|RESET_BIT; 
+	errChk(WritePMTReg(CTRL_REG, g_controlreg));
 	
 	// clear reset bit
-	controlreg = controlreg&~RESET_BIT;
-	errChk(WritePMTReg(CTRL_REG, controlreg));
+	g_controlreg = g_controlreg&~RESET_BIT;
+	errChk(WritePMTReg(CTRL_REG, g_controlreg));
+	 */
+	g_controlreg=0;
 	
-	//set gain to zero, threshold level to 20mV
-	SetPMTGainTresh(PMT1, zero, twenty_mV);
-	SetPMTGainTresh(PMT2, zero, twenty_mV);   
-	SetPMTGainTresh(PMT3, zero, twenty_mV);   
-	SetPMTGainTresh(PMT4, zero, twenty_mV);   
+	//set gain to zero, threshold level to 300mV,offset to 100 mV
+	errChk(SetPMTDefault());
+
 	
 Error:
 	return errorInfo.error;
@@ -803,10 +902,6 @@ INIT_ERR
 
 	unsigned long 	statreg	= 0;
 	
-	//reset DMAChannel
-	errChk(WritePMTReg(USCTRL,0x0200000A));       
-	//  reset fifo's
-	errChk(WritePMTReg(EBCR_REG,0x0A));    
 	
 	errChk(ReadPMTReg(STAT_REG,&statreg));
 		//clear fifo status bits if set
@@ -826,44 +921,38 @@ Error:
 int PMT_ClearControl(int PMTnr)
 {
 INIT_ERR
-
-	unsigned long 	controlreg	= 0;
-	
-	errChk(ReadPMTReg(CTRL_REG,&controlreg));    
 	
 	switch(PMTnr){
 		case PMT1:
-			controlreg = controlreg&~0x70000;    //clear control FAN,TEC and HV bitsfor PMT1
+			g_controlreg = g_controlreg&~0x70000;    //clear control FAN,TEC and HV bitsfor PMT1
 			break;
 		case PMT2:
-			controlreg = controlreg&~0x700000;   //clear control FAN,TEC and HV bitsfor PMT2        
+			g_controlreg = g_controlreg&~0x700000;   //clear control FAN,TEC and HV bitsfor PMT2        
 			break;
 		case PMT3:
-			controlreg = controlreg&~0x7000000;  //clear control FAN,TEC and HV bitsfor PMT3       
+			g_controlreg = g_controlreg&~0x7000000;  //clear control FAN,TEC and HV bitsfor PMT3       
 			break;
 		case PMT4:
-			controlreg = controlreg&~0x70000000; //clear control FAN,TEC and HV bitsfor PMT4       
+			g_controlreg = g_controlreg&~0x70000000; //clear control FAN,TEC and HV bitsfor PMT4       
 			break;
 	}
 	
-	errChk(WritePMTReg(CTRL_REG,controlreg));
+	errChk(WritePMTReg(CTRL_REG,g_controlreg));
 	
 Error:
 	return errorInfo.error;
 }
 
 
-int StartDAQThread(int mode, CmtThreadPoolHandle poolHandle)
+int StartThreads(CmtThreadPoolHandle poolHandle)
 {
 INIT_ERR
 	
-	SetAcqBusy(1);   
+//	SetAcqBusy(1);   
 	
-	errChk(CmtScheduleThreadPoolFunctionAdv(poolHandle, PMTThreadFunction, NULL, THREAD_PRIORITY_NORMAL, NULL, 0, NULL, 0, NULL));   	   //&PMTThreadFunctionID
-	//only launch second acq thread in movie mode
-	if (mode == TASK_CONTINUOUS){
-		errChk(CmtScheduleThreadPoolFunctionAdv(poolHandle, PMTThreadFunction2, NULL, THREAD_PRIORITY_NORMAL, NULL, 0, NULL, 0, NULL));   	   //&PMTThreadFunctionID
-	}
+	
+	CmtScheduleThreadPoolFunction (poolHandle,TCPCommThreadFunction, NULL, &gTCPCommThreadFunctionId);
+	CmtScheduleThreadPoolFunction (poolHandle,TCPDataThreadFunction, NULL, &gTCPDataThreadFunctionId);  
 	
 	ProcessSystemEvents();  //to start the tread functions      
 	
@@ -874,72 +963,285 @@ Error:
 	return errorInfo.error;
 }
 
-int StopDAQThread(CmtThreadPoolHandle poolHandle)
+int StopThreads(CmtThreadPoolHandle poolHandle)
 {
 INIT_ERR
 
-	SetAcqBusy(0);  //should stop the acq thread 
+	if (gTCPCommThreadFunctionId != 0){
+			/*
+			* Client is running on its own thread.
+			* Wait for TCP thread to exit and clean up.
+			*/
+			CmtWaitForThreadPoolFunctionCompletion (poolHandle,gTCPCommThreadFunctionId, 0);
+			CmtReleaseThreadPoolFunctionID (poolHandle,gTCPCommThreadFunctionId);
+			gTCPCommThreadFunctionId = 0;
+	}
+	if (gTCPDataThreadFunctionId != 0){
+			/*
+			* Client is running on its own thread.
+			* Wait for TCP thread to exit and clean up.
+			*/
+			CmtWaitForThreadPoolFunctionCompletion (poolHandle,gTCPDataThreadFunctionId, 0);
+			CmtReleaseThreadPoolFunctionID (poolHandle,gTCPDataThreadFunctionId);
+			gTCPDataThreadFunctionId = 0;
+	}
 	
 	return errorInfo.error;
 }
 
 
-//thread function,
-//run pmt read actions in this separate thread to prevent other daq tasks from underrunning
-int CVICALLBACK PMTThreadFunction(void *(functionData))
+
+
+//added
+
+
+
+int transmit(char* transmitBuf,int len)
 {
-INIT_ERR
-
-	int result	= 0; 
-	int abort	= 0;
-	
-	PMTThreadID = CmtGetCurrentThreadID ();  
-	readerror = 0;    
-
-	SetReadyForReading(1);
-	while (GetAcqBusy() == 1)
-	{
-		if ((readdata) && (!readerror)) {
-			result = ReadBuffer(GetPMTBufsize());
-		}
-		if (gtaskControl) {
-			abort = GetTaskControlAbortFlag(gtaskControl);  
-			if (abort) {
-				errChk( TaskControlIterationDone (gtaskControl, 0, NULL, FALSE, &errorInfo.errMsg) );
-				SetAcqBusy(0);
-			}
-		}
-    }
-	
-	SetReadyForReading(0);
-    //quit
-	SetPMTCommandFlag(0);
-	
-Error:
-	
-	return errorInfo.error;
+	int error=0;
+	if ( ClientTCPWrite (g_hcommtcp, transmitBuf,len, 1000) < 0) 
+		error =-1;
+	if (error<0)  MessagePopup ("ClientTCPWrite", "Error");   
+	return error;
 }
 
-//thread function,
-//run pmt read actions in this separate thread to prevent other daq tasks from underrunning
-int CVICALLBACK PMTThreadFunction2 (void *(functionData))
-{
-	int result	= 0;
-	
-	PMTThread2ID = CmtGetCurrentThreadID ();  
-	
-	//parallel thread requesting data when in movie mode
-	while (GetAcqBusy() == 1)     
-	{
-		if (measurementmode != TASK_FINITE)
-			result = ReadBuffer(GetPMTBufsize());     
-		
-		ProcessSystemEvents();
-    }
-    //quit
 
+
+int SendReg(char* reg,unsigned long regvalue)
+{
+	int error=0;
+	char cmdstr[1024];
+	
+	Fmt(cmdstr,"PhotonCtr %s",reg);
+	cmdstr[15]=regvalue&0x000000FF;
+	cmdstr[16]=(regvalue&0x0000FF00)>>8; 
+	cmdstr[17]=(regvalue&0x00FF0000)>>16;
+	cmdstr[18]=(regvalue&0xFF000000)>>24;  
+	
+	error=transmit(cmdstr,19);
+	return error;
+}
+
+void ParseReceived(char* receiveBuf,int dataSize)
+{
+	if (dataSize==19) {
+		g_reply_received=1; //valid reply 
+		gRegvalue=receiveBuf[15]&0x000000FF;
+		gRegvalue+=(receiveBuf[16]&0x000000FF)<<8;
+		gRegvalue+=(receiveBuf[17]&0x000000FF)<<16;   
+		gRegvalue+=(receiveBuf[18]&0x000000FF)<<24; 
+	}
+	  
+}
+
+/*---------------------------------------------------------------------------*/
+/* This is the TCP client's TCP callback.  This function will receive event  */
+/* notification, similar to a UI callback, whenever a TCP event occurs.      */
+/* We'll respond to the DATAREADY event and read in the available data from  */
+/* the server and display it.  We'll also respond to DISCONNECT events, and  */
+/* tell the user when the server disconnects us.                             */
+/*---------------------------------------------------------------------------*/
+int CVICALLBACK CommandTCPCB (unsigned handle, int event, int error,
+                             void *callbackData)
+{
+	
+    
+    ssize_t commSize         = sizeof (commreceiveBuf) - 1;
+    switch (event)
+        {
+        case TCP_DATAREADY:
+            if ((commSize = ClientTCPRead (g_hcommtcp, commreceiveBuf,
+                                           commSize, 1000))
+                < 0)
+                {
+                	//read failed
+                }
+            else
+            	{
+            	commreceiveBuf[commSize] = '\0';
+				ParseReceived(commreceiveBuf,commSize);
+				
+            	}
+            break;
+        case TCP_DISCONNECT:
+            MessagePopup ("TCP Client", "Server has closed connection!");
+            SetReadyForComm(0);
+            break;
+    }
+    return 0;
+}
+
+
+/*---------------------------------------------------------------------------*/
+/* This is the TCP client's TCP callback.  This function will receive event  */
+/* notification, similar to a UI callback, whenever a TCP event occurs.      */
+/* We'll respond to the DATAREADY event and read in the available data from  */
+/* the server and display it.  We'll also respond to DISCONNECT events, and  */
+/* tell the user when the server disconnects us.                             */
+/*---------------------------------------------------------------------------*/
+int CVICALLBACK DataTCPCB (unsigned handle, int event, int error,
+                             void *callbackData)
+{
+	
+    
+    ssize_t dataSize         = sizeof (dataBuf);
+	
+	double MB_received;
+	double time;
+	double rate;
+	int err;
+
+    switch (event)
+        {
+        case TCP_DATAREADY:
+            if ((dataSize = ClientTCPRead (g_hdatatcp, dataBuf,
+                                           dataSize, 1000))
+                < 0)
+                {
+                // error?
+                }
+            else
+            	{
+			//	if (filehandle) WriteFile(filehandle,dataBuf,dataSize); 
+				gReceivedBytes+=dataSize;
+				err=ParseData (dataBuf,dataSize); 
+				
+				   
+            	}
+            break;
+        case TCP_DISCONNECT:
+            MessagePopup ("TCP Client", "Server has closed connection!");
+            SetReadyForComm(0);
+            break;
+    }
+    return 0;
+}
+
+
+
+/*---------------------------------------------------------------------------*/
+/* Report TCP Errors if any                         						 */
+/*---------------------------------------------------------------------------*/
+static void ReportTCPError(void)
+{
+	if (g_TCPError < 0)
+		{
+		char	messageBuffer[1024];
+		sprintf(messageBuffer, 
+			"TCP library error message: %s\nSystem error message: %s", 
+			GetTCPErrorString (g_TCPError), GetTCPSystemErrorString());
+		MessagePopup ("Error", messageBuffer);
+		g_TCPError = 0;
+		}
+}
+/*---------------------------------------------------------------------------*/
+
+
+
+
+
+/*---------------------------------------------------------------------------*/
+/* TCP thread entry-point function.                         				 */
+/*---------------------------------------------------------------------------*/
+static int CVICALLBACK TCPCommThreadFunction (void *functionData)
+{
+	CommConnect ();
+	while (gRunning)
+		{
+		ProcessSystemEvents ();
+		}
+	CommDisconnect ();													   
 	return 0;
 }
+
+/*---------------------------------------------------------------------------*/
+/* Connect to the TCP server.                         						 */
+/*---------------------------------------------------------------------------*/
+static void CommConnect (void)
+{
+	int		tcpErr = 0;																											 
+	char tempBuf[256] = {0};    
+	
+	tcpChk (ConnectToTCPServer (&g_hcommtcp,  CommPortNumber, ServHostName, 
+		CommandTCPCB, 0, 0));
+	SetReadyForComm(1); 
+	    /* We are successfully connected -- gather info */
+	
+Done:
+	return;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Disconnect from the TCP server.                         					 */
+/*---------------------------------------------------------------------------*/					   
+static void CommDisconnect (void)
+{
+	int		tcpErr = 0;
+	
+	if (!GetReadyForComm())
+		{
+		DisconnectFromTCPServer (g_hcommtcp);
+		SetReadyForComm(0);
+		}
+
+Done:
+	return;
+}
+
+/*---------------------------------------------------------------------------*/
+/* TCP thread entry-point function.                         				 */
+/*---------------------------------------------------------------------------*/
+static int CVICALLBACK TCPDataThreadFunction (void *functionData)
+{
+	DataConnect ();
+	
+	while (gRunning)
+		{
+		ProcessSystemEvents ();
+		}
+	DataDisconnect ();
+	return 0;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Connect to the TCP server.                         						 */
+/*---------------------------------------------------------------------------*/
+static void DataConnect (void)
+{
+	int		tcpErr = 0;
+	char tempBuf[256] = {0};    
+	
+	tcpChk (ConnectToTCPServer (&g_hdatatcp,  DataPortNumber, ServHostName, 
+		DataTCPCB, 0, 0));
+	SetReadyForData(1);
+	
+Done:
+	return;
+}
+
+/*---------------------------------------------------------------------------*/
+/* Disconnect from the TCP server.                         					 */
+/*---------------------------------------------------------------------------*/
+static void DataDisconnect (void)
+{
+	int		tcpErr = 0;
+	
+	DisconnectFromTCPServer (g_hdatatcp);
+	SetReadyForData(0);     
+		
+Done:
+	return;
+}
+
+
+
+
+
+
+
+
+
+
 
 
 

@@ -130,7 +130,9 @@ struct VUPhotonCtr {
 		// Sets the Cooling of the Selected PMT ON or OFF
 	int					(* SetPMT_Cooling) 				(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
 		// Sets the Gain and Threshold of the Selected PMT
-	int					(* SetPMT_GainThresh) 			(VUPhotonCtr_type* vupc, int PMTnr, double gain, double threshold);
+	int					(* SetPMT_Gain) 				(VUPhotonCtr_type* vupc, int PMTnr, double gain);
+		// Sets the Gain and Threshold of the Selected PMT
+	int					(* SetPMT_Thresh) 				(VUPhotonCtr_type* vupc, int PMTnr, double threshold);
 		// Updates status display of Photon Counter from structure data
 	int					(* UpdateVUPhotonCtrDisplay) 	(VUPhotonCtr_type* vupc);
 
@@ -185,7 +187,8 @@ static void						SetVUPCSamplingInfo				(VUPhotonCtr_type* vupc, PulseTrain_type
 static int 						PMT_Set_Mode 					(VUPhotonCtr_type* vupc, int PMTnr, PMT_Mode_type mode);
 static int 						PMT_Set_Fan 					(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
 static int 						PMT_Set_Cooling 				(VUPhotonCtr_type* vupc, int PMTnr, BOOL value);
-static int 						PMT_Set_GainThresh 				(VUPhotonCtr_type* vupc, int PMTnr, double gain, double threshold);
+static int 						PMT_Set_Gain					(VUPhotonCtr_type* vupc, int PMTnr, double gain);
+static int 						PMT_Set_Thresh 					(VUPhotonCtr_type* vupc, int PMTnr, double threshold);    
 static int 						PMTController_UpdateDisplay 	(VUPhotonCtr_type* vupc);
 //void 							PMTController_DimWhenRunning 	(VUPhotonCtr_type* vupc, BOOL dimmed);
 static int 						PMTController_SetTestMode		(VUPhotonCtr_type* vupc, BOOL testmode);
@@ -484,7 +487,7 @@ INIT_ERR
 	SetCtrlIndex(vupc->acqSettingsPanHndl, VUPCSet_MeasMode, TASK_FINITE);
 
 	// update acquisition settings display from structure data
-	SetCtrlVal(vupc->acqSettingsPanHndl, VUPCSet_NSamples, vupc->nSamples);
+	SetCtrlVal(vupc->acqSettingsPanHndl, VUPCSet_NSamples, (unsigned int)vupc->nSamples);
 	SetCtrlVal(vupc->acqSettingsPanHndl, VUPCSet_SamplingRate, vupc->samplingRate/1000);				// display in [kHz]
 	SetCtrlVal(vupc->acqSettingsPanHndl, VUPCSet_Duration, vupc->nSamples/vupc->samplingRate);		// display in [s]
 
@@ -496,7 +499,9 @@ INIT_ERR
 	// add functionality to set the PMT cooling state
 	vupc->SetPMT_Cooling = PMT_Set_Cooling;
 	// add functionality to set the PMT Gain and Threshold
-	vupc->SetPMT_GainThresh = PMT_Set_GainThresh;
+	vupc->SetPMT_Gain = PMT_Set_Gain;
+		// add functionality to set the PMT Gain and Threshold
+	vupc->SetPMT_Thresh = PMT_Set_Thresh;
 	// Updates status display of Photon Counter
 	vupc->UpdateVUPhotonCtrDisplay = PMTController_UpdateDisplay;
 	//add functionality to set test mode
@@ -580,14 +585,14 @@ static void	RedrawMainPanel (VUPhotonCtr_type* vupc)
 	for (int i = 0; i < MAX_CHANNELS; i++)
 		if (vupc->channels[i]){
 			nChannels++;
-			SetPanelAttribute(vupc->channels[i]->panHndl, ATTR_LEFT, (chanPanWidth + MAIN_PAN_SPACING) * (nChannels-1) + MAIN_PAN_MARGIN);
+			SetPanelAttribute(vupc->channels[i]->panHndl, ATTR_LEFT, (int)((chanPanWidth + MAIN_PAN_SPACING) * (nChannels-1) + MAIN_PAN_MARGIN));
 			SetPanelAttribute(vupc->channels[i]->panHndl, ATTR_TOP, MAIN_PAN_MARGIN + menubarHeight);
 			DisplayPanel(vupc->channels[i]->panHndl);
 
 		}
 
 	// reposition Task Controller panel to be the end of all channel panels
-	SetPanelAttribute(vupc->taskPanHndl, ATTR_LEFT, (chanPanWidth + MAIN_PAN_SPACING) * nChannels + MAIN_PAN_MARGIN);
+	SetPanelAttribute(vupc->taskPanHndl, ATTR_LEFT, (int)((chanPanWidth + MAIN_PAN_SPACING) * nChannels + MAIN_PAN_MARGIN));
 	SetPanelAttribute(vupc->taskPanHndl, ATTR_TOP, MAIN_PAN_MARGIN + menubarHeight);
 	DisplayPanel(vupc->taskPanHndl);
 
@@ -601,7 +606,7 @@ static void	RedrawMainPanel (VUPhotonCtr_type* vupc)
 		SetPanelAttribute(vupc->mainPanHndl, ATTR_SCROLL_BARS, VAL_HORIZ_SCROLL_BAR);
 	} else {
 		// adjust size of main panel to match the size of the required number of channels plus Task Controller panel
-		SetPanelAttribute(vupc->mainPanHndl, ATTR_WIDTH, chanPanWidth * nChannels + taskPanWidth + MAIN_PAN_SPACING * nChannels + 2 * MAIN_PAN_MARGIN);
+		SetPanelAttribute(vupc->mainPanHndl, ATTR_WIDTH, (int)(chanPanWidth * nChannels + taskPanWidth + MAIN_PAN_SPACING * nChannels + 2 * MAIN_PAN_MARGIN));
 		SetPanelAttribute(vupc->mainPanHndl, ATTR_HEIGHT, chanPanHeight + 2 * MAIN_PAN_MARGIN + menubarHeight);
 		// remove scroll bars
 		SetPanelAttribute(vupc->mainPanHndl, ATTR_SCROLL_BARS, VAL_NO_SCROLL_BARS);
@@ -700,11 +705,23 @@ Error:
 	return errorInfo.error;
 }
 
-static int PMT_Set_GainThresh (VUPhotonCtr_type* vupc,int PMTnr, double gain, double threshold)
+static int PMT_Set_Gain (VUPhotonCtr_type* vupc,int PMTnr, double gain)
 {
 INIT_ERR
 
-	errChk(SetPMTGainTresh(PMTnr,gain,threshold));
+	errChk(SetPMTGain(PMTnr,gain));
+
+Error:
+	
+	return errorInfo.error;
+}
+
+
+static int PMT_Set_Thresh (VUPhotonCtr_type* vupc,int PMTnr, double threshold)
+{
+INIT_ERR
+
+	errChk(SetPMTTresh(PMTnr,threshold));
 
 Error:
 	
@@ -872,20 +889,16 @@ INIT_ERR
 				case VUPCChan_Gain:
 					//get gain value
 					GetCtrlVal(panel,control,&gain);
-					//get threshold value
-					GetCtrlVal(panel,control-1,&thresh_mV);  //relies on threshold control being 1 lower than gain control (Lex; nasty but works)
-					thresh=thresh_mV/1000;	   				 //convert to volts
-					errChk(PMT_Set_GainThresh (chan->vupcInstance, chan->chanIdx,gain,thresh));
+					errChk(PMT_Set_Gain (chan->vupcInstance, chan->chanIdx,gain));
 					break;
 
 				case VUPCChan_Threshold:
 					//get threshold value
 					GetCtrlVal(panel,control,&thresh_mV);
 					thresh=thresh_mV/1000; 					//convert to volts
-					//get gain value
-					GetCtrlVal(panel,control+1,&gain);      //relies on threshold control being 1 lower than gain control (Lex; nasty but works)
+				
 
-					errChk(PMT_Set_GainThresh (chan->vupcInstance, chan->chanIdx,gain,thresh));
+					errChk(PMT_Set_Thresh (chan->vupcInstance, chan->chanIdx,thresh));
 					break;
 
 				case VUPCChan_Cooling:
@@ -928,7 +941,7 @@ static int CVICALLBACK 	VUPCSettings_CB	(int panel, int control, int event, void
 					GetCtrlIndex(panel, VUPCSet_MeasMode, &measMode);
 					SetTaskControlMode(vupc->taskControl, measMode);
 					
-					PMTSetBufferSize(GetTaskControlMode(vupc->taskControl), vupc->samplingRate, vupc->nSamples);
+				//	PMTSetBufferSize(GetTaskControlMode(vupc->taskControl), vupc->samplingRate, vupc->nSamples);
 					break;
 
 				case VUPCSet_Close:
@@ -1173,7 +1186,7 @@ void HWError(void)
 
 static void VUPC_SetStepCounter	(VUPhotonCtr_type* 	vupc, size_t val)
 {
-	SetCtrlVal(vupc->taskPanHndl, VUPCTask_TotalIterations, val);
+	SetCtrlVal(vupc->taskPanHndl, VUPCTask_TotalIterations, (unsigned int) val);
 }
 
 void CVICALLBACK AcquisitionSettings_CB (int menuBar, int menuItem, void *callbackData, int panel)
@@ -1240,7 +1253,7 @@ INIT_ERR
 	//-------------------------------------------------------------------------------------------------------------------------------
 SkipPulseTrainInfo:
 	
-	PMTSetBufferSize(GetTaskControlMode(vupc->taskControl), vupc->samplingRate, vupc->nSamples); 
+//	PMTSetBufferSize(GetTaskControlMode(vupc->taskControl), vupc->samplingRate, vupc->nSamples); 
 	
 	errChk( PMTStartAcq(GetTaskControlMode(vupc->taskControl), vupc->taskControl, vupc->samplingRate, vupc->channels) );
 	
@@ -1352,7 +1365,7 @@ INIT_ERR
 	PulseTrainModes		pulseTrainMode		= 0;
 	
 	// process data only if task controller is not active
-	if (taskActive) return 0;
+	if (taskActive) return 0; 
 
     // get all data packets
 	errChk( GetAllDataPackets(sinkVChan, &dataPackets, &nPackets, &errorInfo.errMsg) );

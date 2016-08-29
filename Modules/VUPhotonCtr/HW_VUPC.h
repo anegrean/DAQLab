@@ -35,10 +35,6 @@
 #define	 PMT3_CTRL_REG	0x00C8		//0x0018
 #define	 PMT4_CTRL_REG	0x00CC		//0x001C
 			 
-#define	 USCTRL			0x0048      //control of DMA tranaction		 
-#define	 MRDCC_REG		0x0074      //resets MRd channel
-#define	 TLTXC_REG		0x0078      //resets Tx module
-#define	 EBCR_REG		0x0090      //resets FIFO   
 		
 		//control register bits
 #define	APPSTART_BIT	0x00000001
@@ -51,16 +47,20 @@
 #define	TESTMODE1_BIT	0x00008000  		
 #define	PMT1HV_BIT		0x00010000		
 #define	PMT1PELT_BIT	0x00020000		
-#define	PMT1FAN_BIT		0x00040000
+#define	PMT1FAN_BIT		0x00080000
+#define	PMT1EN_BIT		0x80000000
 #define	PMT2HV_BIT		0x00100000		
 #define	PMT2PELT_BIT	0x00200000		
 #define	PMT2FAN_BIT		0x00400000
+#define	PMT2EN_BIT		0x00800000
 #define	PMT3HV_BIT		0x01000000		
 #define	PMT3PELT_BIT	0x02000000		
 #define	PMT3FAN_BIT		0x04000000
+#define	PMT3EN_BIT		0x08000000
 #define	PMT4HV_BIT		0x10000000		
 #define	PMT4PELT_BIT	0x20000000		
 #define	PMT4FAN_BIT		0x40000000
+#define	PMT4EN_BIT		0x80000000
 		
 		//status register bits
 #define RUNNING_BIT		0x00000001
@@ -94,6 +94,22 @@
 
 	// Maximum gain applied to a PMT in [V]
 #define MAX_GAIN_VOLTAGE		0.9
+	
+// definitions for ERC-PhotonCounter
+#define STATREG		"STAT"
+#define CTRLREG 	"CTRL"
+#define PMT1THRES 	"PM1T"
+#define PMT1OFFSET 	"PM1O"  
+#define PMT1GAIN 	"PM1G"
+#define PMT2THRES 	"PM2T"
+#define PMT2OFFSET 	"PM2O"  
+#define PMT2GAIN 	"PM2G"
+#define PMT3THRES 	"PM3T"
+#define PMT3OFFSET 	"PM3O"  
+#define PMT3GAIN 	"PM3G"
+#define PMT4THRES 	"PM4T"
+#define PMT4OFFSET 	"PM4O"  
+#define PMT4GAIN 	"PM4G"
 
 
 //==============================================================================
@@ -127,10 +143,10 @@ int 		PMTClearFifo				(void);
 int 		PMT_SetMode 				(int PMTnr, PMT_Mode_type mode);
 int 		PMT_SetFan 					(int PMTnr, BOOL value);
 int 		PMT_SetCooling 				(int PMTnr, BOOL value);
-int 		SetPMTGainTresh				(int PMTnr, double gain, double threshold);
+int 		SetPMTTresh				    (int PMTnr, double threshold);
+int 		SetPMTGain				    (int PMTnr, double gain);  
 int 		PMT_SetTestMode				(BOOL testmode);
 int 		PMT_ClearControl			(int PMTnr);
-void 		PMTSetBufferSize			(int mode, double sampleRate, int itsamples);
 void 		ResetDataCounter			(void);
 int 		GetDataCounter				(void);
 int 		PMTStartAcq					(TaskMode_type mode, TaskControl_type* taskControl, double samplingRate, Channel_type** channels);

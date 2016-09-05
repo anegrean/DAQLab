@@ -125,7 +125,9 @@ int 				filehandle=0;
 unsigned int 		gRegvalue; 
 unsigned int        g_reply_received; 
 
-unsigned long 		g_controlreg	 = 0;  
+unsigned long 		g_controlreg	 = 0;
+unsigned short*     tempBuffer=NULL;
+unsigned int		tempBufSize =0;
 
 
 
@@ -359,6 +361,11 @@ Error:
 	 return errorInfo.error;
 }
 
+void SetNrSamples(int numsamples)
+{
+	  nrsamples_in_iteration=numsamples;
+}
+
 
 static int ParseData (unsigned short int* sampleBuffer,int numbytes)
 {
@@ -367,61 +374,79 @@ INIT_ERR
 	int 					result			= 0;
 	DataPacket_type*  		dataPacket		= NULL;
 	char*					errMsg			= NULL;  
-	void*     				pmtdataptr		= NULL;
+	unsigned short int*     pmtdata		    = NULL;
 	size_t 					numpixels		= 0;
 	size_t 					numshorts		= 0;
-	size_t 					ndatapoints		= 0;
 	long 					errcode			= 0;
 	Waveform_type* 			waveform		= NULL;
-	int						swappedi		= 0;
-	size_t					totalbytes		= 0;
+	int						dataoffset		    = 0;
+	size_t					bytesperchannel		= 0;
 	DSInfo_type* 			dsInfo			= NULL;
 	
 	
+	
 	if (numbytes > 0) {
-		// deinterlace data here
-		numpixels 	= numbytes/8;  //8 bytes per pixel, result gives number of bytes
-		numshorts 	= numbytes/2;
-		ndatapoints = numshorts/4;
-		//transpose data array
-		TransposeData(sampleBuffer, VAL_SHORT_INTEGER, numshorts, 4);
-		totalbytes=ndatapoints * sizeof(unsigned short);
+		//create temp buffer
+		if (!tempBuffer) {
+			tempBuffer= malloc(numbytes);
+			//fill temp buffer          
+			memcpy((unsigned short*)tempBuffer, (void*)sampleBuffer,numbytes);         
+			tempBufSize=numbytes;
+		}
+		else {
+			nullChk( tempBuffer = realloc(tempBuffer, tempBufSize + numbytes));
+			//fill temp buffer          
+			memcpy((unsigned short*)tempBuffer+tempBufSize/2, (void*)sampleBuffer,numbytes);         
+			tempBufSize+=numbytes;
+		}
+	
+		
+		numpixels 	= tempBufSize/8;  //8 bytes per pixel, result gives number of bytes
+		bytesperchannel  = numpixels * sizeof(unsigned short);
+		
 		//send datapackets
 		//index i is index of active channels; chanIdx contains the PMT channel index
 		for (int i = 0; i < MAX_CHANNELS; i++){
 			if (gchannels[i] != NULL){
 				if (gchannels[i]->VChan != NULL){
 					
-					//swap index; 
-					//to be repaired in hardware!
+					//offset in data
 					switch (i) {
-							
+																						  
 						case 0: 			  
 							
-							swappedi = 0;//2;
+							dataoffset = 0;//2;
 							break;
 							
 						case 1:
 							
-							swappedi = 1;//3;
+							dataoffset = 1;//3;
 							break;
 							
 						case 2:
 							
-							swappedi = 2;//0;
+							dataoffset = 2;//0;
 							break;
 							
 						case 3:
 							
-							swappedi = 3;//1;
+							dataoffset = 3;//1;
 							break;
 					}
-					//full block code
-						nullChk(pmtdataptr = malloc(totalbytes)); 
-						memcpy(pmtdataptr, &sampleBuffer[swappedi*ndatapoints], totalbytes);
-					//end full block code	
+					
+						nullChk(pmtdata = malloc(bytesperchannel));
+						for (int i=0;i<numpixels;i++)
+						{
+							pmtdata[i]=tempBuffer[4*i+dataoffset];
+						}
+					
+					    //test Lex
+						if (*(unsigned short*)pmtdata==0)
+							{
+								break;
+							}
 						// prepare waveform
-						nullChk( waveform = init_Waveform_type(Waveform_UShort, gSamplingRate, ndatapoints, &pmtdataptr) );
+						nullChk( waveform = init_Waveform_type(Waveform_UShort, gSamplingRate, numpixels, &pmtdata) );
 						Iterator_type* currentiter = GetTaskControlIterator(gtaskControl);
 						nullChk( dsInfo = GetIteratorDSData(currentiter, WAVERANK) );
 				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, (void**)&waveform, &dsInfo, (DiscardFptr_type) discard_Waveform_type));       
@@ -431,7 +456,23 @@ INIT_ERR
 				}
 			}
 		}
+		//check temp buffer
+		int restbytes=tempBufSize%8;
+		if (restbytes==0){
+			//send all data, remove temp buffer
+			tempBufSize=0;
+			OKfree(tempBuffer);
+		}
+		else {
+			//adjust temp buffer 
+			tempBufSize=restbytes;
 		
+			
+			for(int i=0;i<tempBufSize/2;i++){
+				tempBuffer[i]=tempBuffer[i+bytesperchannel*2];
+			}
+			nullChk( tempBuffer = realloc(tempBuffer, tempBufSize ));       
+		}
 		if(measurementmode == TASK_FINITE){		 // need to count samples 
 			//data is in pixels
 			nrsamples = nrsamples + numpixels;
@@ -440,7 +481,7 @@ INIT_ERR
 				//iteration is done
 				nrsamples = 0;
 				//needed?
-			//	PMTStopAcq(); 
+				PMTStopAcq(); 
 				errChk( TaskControlIterationDone(gtaskControl, 0, "", FALSE, &errorInfo.errMsg) );   
 			}
 			else {
@@ -457,7 +498,7 @@ INIT_ERR
 	
 Error:	
 	// cleanup
-	OKfree(pmtdataptr);
+	OKfree(pmtdata);
 	discard_Waveform_type(&waveform);
 	discard_DataPacket_type(&dataPacket);
 	discard_DSInfo_type(&dsInfo);
@@ -797,7 +838,7 @@ INIT_ERR
 
 	
 //test lex
-//	filehandle=OpenFile("test.bin",VAL_WRITE_ONLY,VAL_TRUNCATE,VAL_BINARY);
+	//filehandle=OpenFile("test.bin",VAL_WRITE_ONLY,VAL_TRUNCATE,VAL_BINARY);
 	
 	// assign task controller to global (should be avoided in the future!)
 	gtaskControl = taskControl;
@@ -841,7 +882,7 @@ INIT_ERR
 //test lex
 //	if (filehandle!=0) {
 //		CloseFile(filehandle);
-		filehandle=0;
+//		filehandle=0;
 //	}
 	
 	//send null packet(s)
@@ -1102,7 +1143,7 @@ int CVICALLBACK DataTCPCB (unsigned handle, int event, int error,
                 }
             else
             	{
-			//	if (filehandle) WriteFile(filehandle,dataBuf,dataSize); 
+		//		if (filehandle) WriteFile(filehandle,dataBuf,dataSize); 
 				gReceivedBytes+=dataSize;
 				err=ParseData (dataBuf,dataSize); 
 				

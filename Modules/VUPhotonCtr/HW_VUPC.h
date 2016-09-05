@@ -151,6 +151,7 @@ void 		ResetDataCounter			(void);
 int 		GetDataCounter				(void);
 int 		PMTStartAcq					(TaskMode_type mode, TaskControl_type* taskControl, double samplingRate, Channel_type** channels);
 int 		PMTStopAcq					(void);
+void 		SetNrSamples				(int numsamples);
 
 #ifdef __cplusplus
     }

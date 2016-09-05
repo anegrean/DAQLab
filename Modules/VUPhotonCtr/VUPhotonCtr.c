@@ -213,6 +213,8 @@ static int						DoneTC							(TaskControl_type* taskControl, Iterator_type* iter
 
 static int						StoppedTC						(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg);
 
+static int 						IterationStopTC 						(TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg);   
+
 static int						TaskTreeStateChange				(TaskControl_type* taskControl, TaskTreeStates state, char** errorMsg);
 
 static void						TCActive						(TaskControl_type* taskControl, BOOL UITCActiveFlag);
@@ -256,7 +258,7 @@ DAQLabModule_type*	initalloc_VUPhotonCtr (DAQLabModule_type* mod, char className
 	
 	// create VUPhotonCtr Task Controller
 	tc = init_TaskControl_type (instanceName, vupc, DLGetCommonThreadPoolHndl(), ConfigureTC, UnconfigureTC, IterateTC, StartTC, 
-												 	  ResetTC, DoneTC, StoppedTC, NULL, TaskTreeStateChange, TCActive, ModuleEventHandler, ErrorTC); // module data added to the task controller below
+												 	  ResetTC, DoneTC, StoppedTC, IterationStopTC, TaskTreeStateChange, TCActive, ModuleEventHandler, ErrorTC); // module data added to the task controller below
 	if (!tc) {discard_DAQLabModule((DAQLabModule_type**)&vupc); return NULL;}
 	
 	//------------------------------------------------------------
@@ -1116,6 +1118,7 @@ static BOOL ValidTaskControllerName	(char name[], void* dataPtr)
 static void SetVUPCSamplingInfo (VUPhotonCtr_type* vupc, PulseTrain_type* pulseTrain)
 {
 	vupc->nSamples 	= GetPulseTrainNPulses(pulseTrain);
+	SetNrSamples(vupc->nSamples);
 	
 	switch (GetPulseTrainMode(pulseTrain)) {
 				
@@ -1255,10 +1258,11 @@ SkipPulseTrainInfo:
 	
 //	PMTSetBufferSize(GetTaskControlMode(vupc->taskControl), vupc->samplingRate, vupc->nSamples); 
 	
-	errChk( PMTStartAcq(GetTaskControlMode(vupc->taskControl), vupc->taskControl, vupc->samplingRate, vupc->channels) );
-	
 	// inform that slave is armed
 	errChk(SetHWTrigSlaveArmedStatus(vupc->HWTrigSlave, &errorInfo.errMsg));
+	
+	errChk( PMTStartAcq(GetTaskControlMode(vupc->taskControl), vupc->taskControl, vupc->samplingRate, vupc->channels) );
+	
 
 	return;
 	
@@ -1311,7 +1315,8 @@ static int StoppedTC (TaskControl_type* taskControl, Iterator_type* iterator, BO
 static int ResetTC (TaskControl_type* taskControl, BOOL const* abortFlag, char** errorMsg)
 {
 	VUPhotonCtr_type* 		vupc 			= GetTaskControlModuleData(taskControl);
-
+	PMTStopAcq(); 
+	
 	return 0;
 }
 
@@ -1383,6 +1388,23 @@ INIT_ERR
 	
 Error:	   
 				
+RETURN_ERR
+}
+
+static int IterationStopTC (TaskControl_type* taskControl, Iterator_type* iterator, BOOL const* abortFlag, char** errorMsg)
+{
+INIT_ERR
+	
+	VUPhotonCtr_type* 	vupc							= GetTaskControlModuleData(taskControl);
+	
+	// set iteration to done
+	PMTStopAcq();  
+	errChk( TaskControlIterationDone(vupc->taskControl, 0, "", FALSE, &errorInfo.errMsg) );
+	
+
+Error:
+
+	
 RETURN_ERR
 }
  

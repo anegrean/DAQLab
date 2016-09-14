@@ -53,7 +53,7 @@
 //------------------------------------------------------------------------------
 // Connection ID
 //------------------------------------------------------------------------------
-#define PIStage_USB_ID 						"PI C-863 Mercury" // "0115500620"
+#define PIStage_USB_ID 						"0115500620"  //  use "PI C-863 Mercury" or "0115500620"
 #define PIStage_COM_Port					3					// 17
 #define PIStage_COM_BaudRate				9600
 

@@ -440,11 +440,6 @@ INIT_ERR
 							pmtdata[i]=tempBuffer[4*i+dataoffset];
 						}
 					
-					    //test Lex
-						if (*(unsigned short*)pmtdata==0)
-							{
-								break;
-							}
 						// prepare waveform
 						nullChk( waveform = init_Waveform_type(Waveform_UShort, gSamplingRate, numpixels, &pmtdata) );
 						Iterator_type* currentiter = GetTaskControlIterator(gtaskControl);

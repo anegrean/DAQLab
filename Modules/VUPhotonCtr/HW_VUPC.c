@@ -373,7 +373,6 @@ INIT_ERR
 
 	int 					result			= 0;
 	DataPacket_type*  		dataPacket		= NULL;
-	char*					errMsg			= NULL;  
 	unsigned short int*     pmtdata		    = NULL;
 	size_t 					numpixels		= 0;
 	size_t 					numshorts		= 0;
@@ -446,7 +445,7 @@ INIT_ERR
 						nullChk( dsInfo = GetIteratorDSData(currentiter, WAVERANK) );
 				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, (void**)&waveform, &dsInfo, (DiscardFptr_type) discard_Waveform_type));       
 					// send data packet with waveform
-						errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errMsg) );
+						errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errorInfo.errMsg) );
 				//	}
 				}
 			}

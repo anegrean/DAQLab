@@ -95,7 +95,7 @@ AvailableDAQLabModules_type DAQLabModules_InitFunctions[] = {	  // set last para
 	{ MOD_LangLStep_NAME, initalloc_LangLStep, FALSE, 0},
 	{ MOD_NIDAQmxManager_NAME, initalloc_NIDAQmxManager, FALSE, 0 },
 	{ MOD_LaserScanning_NAME, initalloc_LaserScanning, FALSE, 0},
-	//{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
+	{ MOD_VUPhotonCtr_NAME, initalloc_VUPhotonCtr, FALSE, 0 },
 	{ MOD_DataStorage_NAME, initalloc_DataStorage, FALSE, 0 },
 	{ MOD_Pockells_NAME, initalloc_PockellsModule, FALSE, 0 },
 	{ MOD_CoherentCham_NAME, initalloc_CoherentCham, FALSE, 0}

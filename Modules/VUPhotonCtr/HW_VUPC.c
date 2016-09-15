@@ -406,8 +406,7 @@ INIT_ERR
 		//send datapackets
 		//index i is index of active channels; chanIdx contains the PMT channel index
 		for (int i = 0; i < MAX_CHANNELS; i++){
-			if (gchannels[i] != NULL){
-				if (gchannels[i]->VChan != NULL){
+			if (gchannels[i] != NULL && gchannels[i]->VChan != NULL){
 					
 					//offset in data
 					switch (i) {
@@ -446,8 +445,7 @@ INIT_ERR
 				    	nullChk( dataPacket	= init_DataPacket_type(DL_Waveform_UShort, (void**)&waveform, &dsInfo, (DiscardFptr_type) discard_Waveform_type));       
 					// send data packet with waveform
 						errChk( SendDataPacket(gchannels[i]->VChan, &dataPacket, 0, &errorInfo.errMsg) );
-				//	}
-				}
+				
 			}
 		}
 		//check temp buffer

@@ -1,10 +1,13 @@
 //==============================================================================
 //
 // Title:		DataPacket.h
-// Purpose:		A short description of the interface.
+// Purpose:		Passes data through virtual channels.
 //
 // Created on:	10/8/2014 at 3:14:26 PM by Adrian Negrean.
 // Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
+// License:     This Source Code Form is subject to the terms of the Mozilla Public 
+//              License v. 2.0. If a copy of the MPL was not distributed with this 
+//              file, you can obtain one at https://mozilla.org/MPL/2.0/ . 
 //
 //==============================================================================
 

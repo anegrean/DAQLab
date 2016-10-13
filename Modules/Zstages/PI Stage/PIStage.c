@@ -3,10 +3,13 @@
 //==============================================================================
 //
 // Title:		PIStage.c
-// Purpose:		A short description of the implementation.
+// Purpose:		PI Z-STAGE.
 //
 // Created on:	10-3-2014 at 12:06:57 by Adrian Negrean.
 // Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
+// License:     This Source Code Form is subject to the terms of the Mozilla Public 
+//              License v. 2.0. If a copy of the MPL was not distributed with this 
+//              file, you can obtain one at https://mozilla.org/MPL/2.0/ . 
 //
 //==============================================================================
 

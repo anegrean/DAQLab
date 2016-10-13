@@ -1,9 +1,13 @@
- /*-----------------------------------------------------------------------------------------*/
- /*                                                                                         */
- /* FILE:    VU_PCIkernel.h                                                                 */
- /*                                                                                         */
- /* PURPOSE: This is the header file for VU_PCI_kernel.dll.  				    */
- /*-----------------------------------------------------------------------------------------*/
+//-----------------------------------------------------------------------------------------
+//                                                                                         
+// Title:      VU_PCIkernel.h                                                                                                                                                   
+// Purpose:    This is the header file for VU_PCI_kernel.dll.  				
+//
+// Copyright:  Vrije Universiteit Amsterdam. All Rights Reserved.              
+// License:    This Source Code Form is subject to the terms of the Mozilla Public 
+//             License v. 2.0. If a copy of the MPL was not distributed with this 
+//             file, you can obtain one at https://mozilla.org/MPL/2.0/ . 
+//-----------------------------------------------------------------------------------------
 
 
 // VUPCI_Open needs to be called as first function

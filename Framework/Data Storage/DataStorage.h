@@ -1,10 +1,13 @@
 //==============================================================================
 //
 // Title:		DataStorage.h
-// Purpose:		A short description of the interface.
+// Purpose:		Used for writing data to disk.
 //
-// Created on:	12-9-2014 at 12:08:22 by Lex van der Gracht.
+// Created on:	12-9-2014 at 12:08:22 by Lex van der Gracht and Adrian Negrean.
 // Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
+// License:     This Source Code Form is subject to the terms of the Mozilla Public 
+//              License v. 2.0. If a copy of the MPL was not distributed with this 
+//              file, you can obtain one at https://mozilla.org/MPL/2.0/ . 
 //
 //==============================================================================
 

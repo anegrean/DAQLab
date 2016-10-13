@@ -1,11 +1,14 @@
 
 //==============================================================================
 //
-// Title:		GalvoScanEngine.c
-// Purpose:		A short description of the implementation.
+// Title:		LaserScanning.c
+// Purpose:		Laser scanning and photostimulation.
 //
 // Created on:	25-8-2014 at 14:17:14 by Adrian Negrean.
 // Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
+// License:     This Source Code Form is subject to the terms of the Mozilla Public 
+//              License v. 2.0. If a copy of the MPL was not distributed with this 
+//              file, you can obtain one at https://mozilla.org/MPL/2.0/ . 
 //
 //==============================================================================
 

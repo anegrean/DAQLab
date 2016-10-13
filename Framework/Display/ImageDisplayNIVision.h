@@ -1,10 +1,13 @@
 //==============================================================================
 //
 // Title:		ImageDisplayNIVision.h
-// Purpose:		A short description of the interface.
+// Purpose:		Image display using NI Vision Module.
 //
 // Created on:	3-2-2015 at 17:41:58 by Adrian Negrean.
 // Copyright:	VU University Amsterdam. All Rights Reserved.
+// License:     This Source Code Form is subject to the terms of the Mozilla Public 
+//              License v. 2.0. If a copy of the MPL was not distributed with this 
+//              file, you can obtain one at https://mozilla.org/MPL/2.0/ .
 //
 //==============================================================================
 

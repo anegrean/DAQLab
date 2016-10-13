@@ -1,10 +1,13 @@
 //==============================================================================
 //
 // Title:		XYStage.h
-// Purpose:		A short description of the interface.
+// Purpose:		Generic Xy stage.
 //
 // Created on:	18-3-2015 at 16:38:28 by Adrian Negrean.
 // Copyright:	VU University Amsterdam. All Rights Reserved.
+// License:     This Source Code Form is subject to the terms of the Mozilla Public 
+//              License v. 2.0. If a copy of the MPL was not distributed with this 
+//              file, you can obtain one at https://mozilla.org/MPL/2.0/ . 
 //
 //==============================================================================
 

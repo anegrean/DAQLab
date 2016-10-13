@@ -3,10 +3,13 @@
 //==============================================================================
 //
 // Title:		WaveformDisplay.c
-// Purpose:		A short description of the implementation.
+// Purpose:		Displays waveforms.
 //
 // Created on:	16-7-2015 at 13:16:19 by Adrian Negrean.
 // Copyright:	VU University Amsterdam. All Rights Reserved.
+// License:     This Source Code Form is subject to the terms of the Mozilla Public 
+//              License v. 2.0. If a copy of the MPL was not distributed with this 
+//              file, you can obtain one at https://mozilla.org/MPL/2.0/ .
 //
 //==============================================================================
 

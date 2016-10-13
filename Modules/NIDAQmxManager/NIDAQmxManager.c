@@ -1,10 +1,13 @@
 //==============================================================================
 //
 // Title:		NIDAQmxManager.c
-// Purpose:		A short description of the implementation.
+// Purpose:		NIDAQmx control for data acquisition and generation.
 //
 // Created on:	22-7-2014 at 15:54:27 by Adrian Negrean.
 // Copyright:	Vrije Universiteit Amsterdam. All Rights Reserved.
+// License:     This Source Code Form is subject to the terms of the Mozilla Public 
+//              License v. 2.0. If a copy of the MPL was not distributed with this 
+//              file, you can obtain one at https://mozilla.org/MPL/2.0/ . 
 //
 //==============================================================================
 

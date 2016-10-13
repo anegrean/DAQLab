@@ -1,10 +1,13 @@
 //==============================================================================
 //
 // Title:		taskcontrolTest.c
-// Purpose:		A short description of the implementation.
+// Purpose:		Task controller testing.
 //
 // Created on:	2014.05.15. at 13:39:39 by Adrian Negrean.
 // Copyright:	VU University Amsterdam. All Rights Reserved.
+// License:     This Source Code Form is subject to the terms of the Mozilla Public 
+//              License v. 2.0. If a copy of the MPL was not distributed with this 
+//              file, you can obtain one at https://mozilla.org/MPL/2.0/ . 
 //
 //==============================================================================
 

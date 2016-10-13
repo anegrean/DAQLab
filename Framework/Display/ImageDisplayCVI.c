@@ -3,11 +3,13 @@
 //==============================================================================
 //
 // Title:		ImageDisplayCVI.c
-// Purpose:		A short description of the implementation.
+// Purpose:		Image display using CVI functions (no need for NI Vision module).
 //
-// Created on:	10/13/2015 at 2:09:46 PM by popescu.andrei1991@gmail.com.
-// Modified by: Adrian Negrean.
+// Created on:	10/13/2015 at 2:09:46 PM by Andrei Popescu and Adrian Negrean
 // Copyright:	Vrije University Amsterdam. All Rights Reserved.
+// License:     This Source Code Form is subject to the terms of the Mozilla Public 
+//              License v. 2.0. If a copy of the MPL was not distributed with this 
+//              file, you can obtain one at https://mozilla.org/MPL/2.0/ . 
 //
 //==============================================================================
 

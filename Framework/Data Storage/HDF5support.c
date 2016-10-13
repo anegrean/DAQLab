@@ -1,10 +1,13 @@
 //==============================================================================
 //
 // Title:		HDF5support
-// Purpose:		A short description of the application.
+// Purpose:		Writes data to disk in HDF5 file format.
 //
 // Created on:	25-3-2015 at 9:41:17 by Adrian Negrean.
 // Copyright:	Vrije Universiteit. All Rights Reserved.
+// License:     This Source Code Form is subject to the terms of the Mozilla Public 
+//              License v. 2.0. If a copy of the MPL was not distributed with this 
+//              file, you can obtain one at https://mozilla.org/MPL/2.0/ . 
 //
 //==============================================================================
 

@@ -1,0 +1,62 @@
+======================================= DAQLab project installation notes (4 Feb 2017) =======================================
+
+The following instructions have been tested on a 64-bit Windows 10 Pro machine.
+==============================================================================================================================
+
+
+1. NI-DAQmx
+-------------------------------
+
+- To perform measurements using National Instruments compatible hardware, if not present, install National Instruments NI-DAQmx 16.0.1 (or newer) from: 			
+	http://sine.ni.com/nips/cds/view/p/lang/en/nid/10181
+
+2. NI CVI
+------------------------------- 
+
+- Install CVI 2015 SP1 or later. Please note that the current version of DAQLab was tested with CVI 2015 SP1 and that other versions may have problems 
+loading the project files, which is the case for CVI 2015 SP1. If NI-DAQmx is not present and use of National Instruments hardware is not intended, ignore the 
+LabWindows/CVI Message that appears on opening the DAQLab project:
+	<< Unable to open file
+   	   "C:\...\Shared\CVI\toolslib\custctrl\daqmxioctrl.fp"
+   	   (File not found)                                      >> 
+
+3. HDF5 data storage
+-------------------------------
+
+- To be able to store measurement data in the HDF5 format, install HDF5-1.10.0-patch1 or a newer version (if still compatible) which can be found at:
+	https://support.hdfgroup.org/HDF5/release/obtain5110.html
+
+- In the CVI 2015 SP1 project window, go to 'Options->Environment->(Advanced) Include paths' and press Switch Lists (or F6) to edit include paths specific to 
+the DAQLab project. Add the HDF5 'include' folder, e.g. 'c:\HDF_Group\HDF5\1.10.0\include' and delete from the list any outdated HDF5 path if present.
+
+- Check if in the CVI 2015 SP1 project window, in the 'Data Storage' folder hdf5.lib exists. If not, right click on the 'Data Storage' folder, select 
+'Add existing file' and add 'hdf5.lib' from the HDF5 lib folder, 'e.g. c:\HDF_Group\HDF5\1.10.0\lib'. If it exists, check if it points to the correct 
+installation path and if not, right click on it and select 'Replace file in project' and update the path.
+
+- Make the following changes to the installed HDF5 files:
+	a) In include\H5Gpublic.h and include\H5public.h change '#include <sys\types>' to '#include <types>'
+	b) In include\H5pubconf.h:
+		- set '#define H5_HAVE_VISUAL_STUDIO' to 0
+		- set 'H5_HAVE_SYS_STAT_H' to 0
+		- set 'H5_HAVE_SYS_TIMEB_H' to 0
+        c) To get proper dll exports add to include\H5api_adpt.h to the end of the file just before #endif /* H5API_ADPT_H */: 
+           '#define H5_DLLVAR __declspec(dllimport)' 
+
+4. NI Vision Development Module
+-------------------------------
+
+NI Vision Development Module 2016 has been used to display images acquired by the laser scanning module and to provide basic means to interact with the image, 
+e.g. to select regions of interest. As NI Vision needs a separate license, if already present, it may be readily used by the laser scanning module. 
+If purchasing NI Vision Development Module is not feasible, another way images can be displayed is to use native CVI controls, albeit this feature is not 
+yet fully implemented. To switch between the display engines, in 'Laser Scanning\LaserScanning.c' replace '#include "ImageDisplayNIVision.h"' with 
+'#include "ImageDisplayCVI.h"' and include 'Display\ImageDisplayCVI.c' in the build by right cliking on it in the project view and selecting 
+'Include File in Build'.
+
+5. Building the project
+-------------------------------
+
+In the CVI 2015 SP1 workspace select 'Build->Build'. At this point there may be hardware-specific DLLs that were not found which belong to various modules 
+in the project. To remove these dependecies from the project, find the missing .lib file (if any) in the workspace folders as well as the modules .c file
+using the library and exclude both from the build by right-clicking these files and selecting 'Exclude File from Build'. If all went well, the Build 
+process will create 'DAQLab.exe' which can be launched from the project view by pressing the green launch triangle.
+ 

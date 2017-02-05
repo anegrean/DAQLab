@@ -31,7 +31,8 @@
 // Choose only one of the include files below
 //----------------------------------------------------------------------------
 #include "ImageDisplayNIVision.h"
-//#include "ImageDisplayCVI2.h"
+// use of native CVI controls is not yet fully implemented
+//#include "ImageDisplayCVI.h"
 //----------------------------------------------------------------------------
 
 									 
